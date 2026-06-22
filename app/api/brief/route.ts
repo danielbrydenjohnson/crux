@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getAssociatedTargets } from "@/lib/sources/openTargets";
+import {
+  getAssociatedTargets,
+  getTargetDetail,
+} from "@/lib/sources/openTargets";
 
 interface BriefRequestBody {
   efoId?: unknown;
@@ -31,9 +34,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await getAssociatedTargets(body.efoId);
+    const associatedTargets = await getAssociatedTargets(body.efoId);
 
-    if (!result) {
+    if (!associatedTargets) {
       return NextResponse.json(
         {
           ok: false,
@@ -43,12 +46,44 @@ export async function POST(request: Request) {
       );
     }
 
+    const clinicalTarget = associatedTargets.targets.find((target) =>
+      target.evidenceBreakdown.some(
+        (evidence) => evidence.id === "clinical",
+      ),
+    );
+
+    if (!clinicalTarget) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "No target with clinical evidence was found.",
+        },
+        { status: 404 },
+      );
+    }
+
+    const targetDetail = await getTargetDetail(
+      clinicalTarget.ensemblId,
+    );
+
+    if (!targetDetail) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Target details were not found.",
+        },
+        { status: 404 },
+      );
+    }
+
     return NextResponse.json({
       ok: true,
-      result,
+      disease: associatedTargets.disease,
+      selectedTarget: clinicalTarget,
+      targetDetail,
     });
   } catch (error) {
-    console.error("Associated target lookup failed:", error);
+    console.error("Open Targets lookup failed:", error);
 
     return NextResponse.json(
       {

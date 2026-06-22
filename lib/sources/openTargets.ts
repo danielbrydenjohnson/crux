@@ -1,5 +1,9 @@
 import { DEFAULT_TARGET_COUNT } from "@/lib/config";
-import type { EvidenceType, Source } from "@/lib/types";
+import type {
+  EvidenceType,
+  Source,
+  TractabilitySummary,
+} from "@/lib/types";
 
 const OPEN_TARGETS_GRAPHQL_URL =
   "https://api.platform.opentargets.org/api/v4/graphql";
@@ -44,15 +48,83 @@ const ASSOCIATED_TARGETS_QUERY = `
   }
 `;
 
+const TARGET_DETAIL_QUERY = `
+  query TargetDetail($ensemblId: String!) {
+    target(ensemblId: $ensemblId) {
+      id
+      approvedSymbol
+      approvedName
+      tractability {
+        label
+        modality
+        value
+      }
+      drugAndClinicalCandidates {
+        count
+        rows {
+          maxClinicalStage
+          drug {
+            id
+            name
+            maximumClinicalStage
+          }
+        }
+      }
+    }
+  }
+`;
+
 const EVIDENCE_TYPE_LABELS: Record<string, string> = {
   genetic_association: "Genetic association",
+  genetic_literature: "Genetic literature",
   known_drug: "Known drug",
+  clinical: "Clinical",
   literature: "Literature",
   rna_expression: "RNA expression",
   animal_model: "Animal model",
   somatic_mutation: "Somatic mutation",
   affected_pathway: "Affected pathway",
 };
+
+const SMALL_MOLECULE_TRACTABILITY_ORDER = [
+  "Approved Drug",
+  "Advanced Clinical",
+  "Phase 1 Clinical",
+  "Structure with Ligand",
+  "High-Quality Ligand",
+  "High-Quality Pocket",
+  "Med-Quality Pocket",
+  "Druggable Family",
+];
+
+const ANTIBODY_TRACTABILITY_ORDER = [
+  "Approved Drug",
+  "Advanced Clinical",
+  "Phase 1 Clinical",
+  "UniProt loc high conf",
+  "GO CC high conf",
+  "UniProt loc med conf",
+  "UniProt SigP or TMHMM",
+  "GO CC med conf",
+  "Human Protein Atlas loc",
+];
+
+const PROTAC_TRACTABILITY_ORDER = [
+  "Approved Drug",
+  "Advanced Clinical",
+  "Phase 1 Clinical",
+  "Literature",
+  "UniProt Ubiquitination",
+  "Database Ubiquitination",
+  "Half-life Data",
+  "Small Molecule Binder",
+];
+
+const OTHER_CLINICAL_TRACTABILITY_ORDER = [
+  "Approved Drug",
+  "Advanced Clinical",
+  "Phase 1 Clinical",
+];
 
 export interface DiseaseMatch {
   efoId: string;
@@ -83,6 +155,27 @@ export interface AssociatedTargetsResult {
   };
   totalCount: number;
   targets: AssociatedTarget[];
+}
+
+export interface TargetDetailResult {
+  ensemblId: string;
+  symbol: string;
+  name: string;
+  tractability: TractabilitySummary;
+  knownDrugs: string[];
+  source: Source;
+}
+
+interface TractabilityBucket {
+  label: string;
+  modality: string;
+  value: boolean;
+}
+
+interface KnownDrugCandidate {
+  name: string;
+  clinicalStage: string;
+  clinicalStageRank: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -158,8 +251,11 @@ async function requestOpenTargets(
     });
 
     if (!response.ok) {
+      const errorBody = await response.text();
+      const errorDetail = errorBody.slice(0, 500);
+
       throw new Error(
-        `Open Targets request failed with status ${response.status}.`,
+        `Open Targets request failed with status ${response.status}. ${errorDetail}`,
       );
     }
 
@@ -203,7 +299,9 @@ function readSearchHits(payload: unknown): unknown[] {
   }
 
   if (!Array.isArray(data.search.hits)) {
-    throw new Error("Open Targets search results were not in the expected format.");
+    throw new Error(
+      "Open Targets search results were not in the expected format.",
+    );
   }
 
   return data.search.hits;
@@ -343,6 +441,217 @@ function readAssociatedTargets(
   };
 }
 
+function parseTractabilityBucket(
+  value: unknown,
+): TractabilityBucket | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.label !== "string" ||
+    typeof value.modality !== "string" ||
+    typeof value.value !== "boolean"
+  ) {
+    return null;
+  }
+
+  return {
+    label: value.label,
+    modality: value.modality,
+    value: value.value,
+  };
+}
+
+function selectHighestTractabilityLabel(
+  buckets: TractabilityBucket[],
+  modality: string,
+  preferredOrder: string[],
+): string | null {
+  const availableLabels = buckets
+    .filter((bucket) => bucket.modality === modality && bucket.value)
+    .map((bucket) => bucket.label);
+
+  for (const preferredLabel of preferredOrder) {
+    if (availableLabels.includes(preferredLabel)) {
+      return preferredLabel;
+    }
+  }
+
+  return availableLabels[0] ?? null;
+}
+
+function buildTractabilitySummary(
+  buckets: TractabilityBucket[],
+): TractabilitySummary {
+  const protac = selectHighestTractabilityLabel(
+    buckets,
+    "PR",
+    PROTAC_TRACTABILITY_ORDER,
+  );
+
+  const otherClinical = selectHighestTractabilityLabel(
+    buckets,
+    "OC",
+    OTHER_CLINICAL_TRACTABILITY_ORDER,
+  );
+
+  const otherParts: string[] = [];
+
+  if (protac) {
+    otherParts.push(`PROTAC: ${protac}`);
+  }
+
+  if (otherClinical) {
+    otherParts.push(`Other clinical: ${otherClinical}`);
+  }
+
+  return {
+    smallMolecule: selectHighestTractabilityLabel(
+      buckets,
+      "SM",
+      SMALL_MOLECULE_TRACTABILITY_ORDER,
+    ),
+    antibody: selectHighestTractabilityLabel(
+      buckets,
+      "AB",
+      ANTIBODY_TRACTABILITY_ORDER,
+    ),
+    other: otherParts.length > 0 ? otherParts.join("; ") : null,
+  };
+}
+
+function getClinicalStageRank(stage: string): number {
+  const normalisedStage = stage.trim().toLowerCase();
+
+  if (normalisedStage.includes("approved")) {
+    return 100;
+  }
+
+  const phaseMatch = normalisedStage.match(/phase\s*([0-4])/);
+
+  if (phaseMatch) {
+    return Number(phaseMatch[1]) * 10;
+  }
+
+  if (normalisedStage.includes("preclinical")) {
+    return 5;
+  }
+
+  return 0;
+}
+
+function parseKnownDrugCandidate(
+  value: unknown,
+): KnownDrugCandidate | null {
+  if (!isRecord(value) || !isRecord(value.drug)) {
+    return null;
+  }
+
+  if (typeof value.drug.name !== "string") {
+    return null;
+  }
+
+  const clinicalStage =
+    typeof value.maxClinicalStage === "string"
+      ? value.maxClinicalStage
+      : typeof value.drug.maximumClinicalStage === "string"
+        ? value.drug.maximumClinicalStage
+        : "";
+
+  return {
+    name: value.drug.name,
+    clinicalStage,
+    clinicalStageRank: getClinicalStageRank(clinicalStage),
+  };
+}
+
+function collectKnownDrugNames(value: unknown): string[] {
+  if (!isRecord(value) || !Array.isArray(value.rows)) {
+    return [];
+  }
+
+  const candidates = value.rows
+    .map(parseKnownDrugCandidate)
+    .filter(
+      (candidate): candidate is KnownDrugCandidate => candidate !== null,
+    )
+    .sort((first, second) => {
+      if (second.clinicalStageRank !== first.clinicalStageRank) {
+        return second.clinicalStageRank - first.clinicalStageRank;
+      }
+
+      return first.name.localeCompare(second.name);
+    });
+
+  const names: string[] = [];
+  const seenNames = new Set<string>();
+
+  for (const candidate of candidates) {
+    const trimmedName = candidate.name.trim();
+    const normalisedName = trimmedName.toLowerCase();
+
+    if (!normalisedName || seenNames.has(normalisedName)) {
+      continue;
+    }
+
+    seenNames.add(normalisedName);
+    names.push(trimmedName);
+  }
+
+  return names;
+}
+
+function readTargetDetail(
+  payload: unknown,
+): TargetDetailResult | null {
+  const data = readGraphQlData(payload);
+
+  if (data.target === null) {
+    return null;
+  }
+
+  if (!isRecord(data.target)) {
+    throw new Error(
+      "Open Targets response did not contain a valid target.",
+    );
+  }
+
+  const target = data.target;
+
+  if (
+    typeof target.id !== "string" ||
+    typeof target.approvedSymbol !== "string" ||
+    typeof target.approvedName !== "string"
+  ) {
+    throw new Error("Open Targets target identity was incomplete.");
+  }
+
+  const tractabilityBuckets = Array.isArray(target.tractability)
+    ? target.tractability
+        .map(parseTractabilityBucket)
+        .filter(
+          (bucket): bucket is TractabilityBucket => bucket !== null,
+        )
+    : [];
+
+  return {
+    ensemblId: target.id,
+    symbol: target.approvedSymbol,
+    name: target.approvedName,
+    tractability: buildTractabilitySummary(tractabilityBuckets),
+    knownDrugs: collectKnownDrugNames(
+      target.drugAndClinicalCandidates,
+    ),
+    source: {
+      id: `ot-target:${target.id}`,
+      type: "open_targets",
+      label: "Open Targets target profile",
+      url: `https://platform.opentargets.org/target/${target.id}`,
+    },
+  };
+}
+
 export async function resolveDisease(
   diseaseName: string,
 ): Promise<DiseaseResolution | null> {
@@ -396,4 +705,20 @@ export async function getAssociatedTargets(
   });
 
   return readAssociatedTargets(payload, trimmedEfoId);
+}
+
+export async function getTargetDetail(
+  ensemblId: string,
+): Promise<TargetDetailResult | null> {
+  const trimmedEnsemblId = ensemblId.trim();
+
+  if (!trimmedEnsemblId) {
+    throw new Error("Ensembl ID is required.");
+  }
+
+  const payload = await requestOpenTargets(TARGET_DETAIL_QUERY, {
+    ensemblId: trimmedEnsemblId,
+  });
+
+  return readTargetDetail(payload);
 }
