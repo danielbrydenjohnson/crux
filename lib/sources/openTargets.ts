@@ -62,11 +62,21 @@ const TARGET_DETAIL_QUERY = `
       drugAndClinicalCandidates {
         count
         rows {
-          maxClinicalStage
           drug {
             id
             name
-            maximumClinicalStage
+            parentMolecule {
+              id
+              name
+            }
+          }
+          clinicalReports {
+            clinicalStage
+            diseases {
+              disease {
+                id
+              }
+            }
           }
         }
       }
@@ -126,6 +136,38 @@ const OTHER_CLINICAL_TRACTABILITY_ORDER = [
   "Phase 1 Clinical",
 ];
 
+const DRUG_FORMULATION_SUFFIXES = [
+  "anhydrous",
+  "monohydrate",
+  "dihydrate",
+  "hydrate",
+  "hydrochloride",
+  "hydrobromide",
+  "mesylate",
+  "esylate",
+  "besylate",
+  "tosylate",
+  "sodium",
+  "potassium",
+  "calcium",
+  "magnesium",
+  "acetate",
+  "citrate",
+  "phosphate",
+  "fumarate",
+  "maleate",
+  "tartrate",
+  "succinate",
+  "oxalate",
+  "sulfate",
+  "sulphate",
+  "nitrate",
+  "chloride",
+  "bromide",
+  "lactate",
+  "gluconate",
+];
+
 export interface DiseaseMatch {
   efoId: string;
   name: string;
@@ -173,9 +215,10 @@ interface TractabilityBucket {
 }
 
 interface KnownDrugCandidate {
-  name: string;
+  canonicalName: string;
   clinicalStage: string;
   clinicalStageRank: number;
+  isDirectCanonicalName: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -522,27 +565,115 @@ function buildTractabilitySummary(
 }
 
 function getClinicalStageRank(stage: string): number {
-  const normalisedStage = stage.trim().toLowerCase();
+  const normalisedStage = stage.trim().toUpperCase().replace(/\s+/g, "_");
 
-  if (normalisedStage.includes("approved")) {
+  if (normalisedStage.includes("APPROVAL")) {
     return 100;
   }
 
-  const phaseMatch = normalisedStage.match(/phase\s*([0-4])/);
-
-  if (phaseMatch) {
-    return Number(phaseMatch[1]) * 10;
+  if (normalisedStage.includes("EARLY_PHASE_1")) {
+    return 8;
   }
 
-  if (normalisedStage.includes("preclinical")) {
+  const phaseMatches = Array.from(
+    normalisedStage.matchAll(/PHASE_?([0-4])/g),
+  );
+
+  if (phaseMatches.length > 0) {
+    return Math.max(
+      ...phaseMatches.map((match) => Number(match[1]) * 10),
+    );
+  }
+
+  if (normalisedStage.includes("PRECLINICAL")) {
     return 5;
   }
 
   return 0;
 }
 
+function clinicalReportMatchesDisease(
+  value: unknown,
+  efoId: string,
+): boolean {
+  if (!isRecord(value) || !Array.isArray(value.diseases)) {
+    return false;
+  }
+
+  return value.diseases.some((diseaseEntry) => {
+    if (!isRecord(diseaseEntry) || !isRecord(diseaseEntry.disease)) {
+      return false;
+    }
+
+    return diseaseEntry.disease.id === efoId;
+  });
+}
+
+function getHighestDiseaseClinicalStage(
+  clinicalReports: unknown,
+  efoId: string,
+): string | null {
+  if (!Array.isArray(clinicalReports)) {
+    return null;
+  }
+
+  const matchingStages = clinicalReports
+    .filter((report) => clinicalReportMatchesDisease(report, efoId))
+    .map((report) => {
+      if (!isRecord(report) || typeof report.clinicalStage !== "string") {
+        return null;
+      }
+
+      return report.clinicalStage;
+    })
+    .filter((stage): stage is string => stage !== null)
+    .sort((first, second) => {
+      const rankDifference =
+        getClinicalStageRank(second) - getClinicalStageRank(first);
+
+      if (rankDifference !== 0) {
+        return rankDifference;
+      }
+
+      return first.localeCompare(second);
+    });
+
+  return matchingStages[0] ?? null;
+}
+
+function stripDrugFormulationSuffixes(name: string): string {
+  let cleanedName = name.trim().replace(/\s+/g, " ");
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (const suffix of DRUG_FORMULATION_SUFFIXES) {
+      const suffixPattern = new RegExp(
+        `(?:\\s+|[-,]\\s*)${suffix}$`,
+        "i",
+      );
+
+      const nextName = cleanedName.replace(suffixPattern, "").trim();
+
+      if (nextName && nextName !== cleanedName) {
+        cleanedName = nextName;
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return cleanedName;
+}
+
+function normaliseDrugKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
 function parseKnownDrugCandidate(
   value: unknown,
+  efoId: string,
 ): KnownDrugCandidate | null {
   if (!isRecord(value) || !isRecord(value.drug)) {
     return null;
@@ -552,58 +683,96 @@ function parseKnownDrugCandidate(
     return null;
   }
 
-  const clinicalStage =
-    typeof value.maxClinicalStage === "string"
-      ? value.maxClinicalStage
-      : typeof value.drug.maximumClinicalStage === "string"
-        ? value.drug.maximumClinicalStage
-        : "";
+  const diseaseClinicalStage = getHighestDiseaseClinicalStage(
+    value.clinicalReports,
+    efoId,
+  );
+
+  if (!diseaseClinicalStage) {
+    return null;
+  }
+
+  const rawDrugName = value.drug.name.trim();
+
+  const parentDrugName =
+    isRecord(value.drug.parentMolecule) &&
+    typeof value.drug.parentMolecule.name === "string"
+      ? value.drug.parentMolecule.name.trim()
+      : null;
+
+  const canonicalName = stripDrugFormulationSuffixes(
+    parentDrugName || rawDrugName,
+  );
+
+  if (!canonicalName) {
+    return null;
+  }
 
   return {
-    name: value.drug.name,
-    clinicalStage,
-    clinicalStageRank: getClinicalStageRank(clinicalStage),
+    canonicalName,
+    clinicalStage: diseaseClinicalStage,
+    clinicalStageRank: getClinicalStageRank(diseaseClinicalStage),
+    isDirectCanonicalName:
+      normaliseDrugKey(rawDrugName) === normaliseDrugKey(canonicalName),
   };
 }
 
-function collectKnownDrugNames(value: unknown): string[] {
+function collectKnownDrugNames(
+  value: unknown,
+  efoId: string,
+): string[] {
   if (!isRecord(value) || !Array.isArray(value.rows)) {
     return [];
   }
 
   const candidates = value.rows
-    .map(parseKnownDrugCandidate)
+    .map((row) => parseKnownDrugCandidate(row, efoId))
     .filter(
       (candidate): candidate is KnownDrugCandidate => candidate !== null,
-    )
+    );
+
+  const bestCandidateByDrug = new Map<string, KnownDrugCandidate>();
+
+  for (const candidate of candidates) {
+    const key = normaliseDrugKey(candidate.canonicalName);
+    const existingCandidate = bestCandidateByDrug.get(key);
+
+    if (!existingCandidate) {
+      bestCandidateByDrug.set(key, candidate);
+      continue;
+    }
+
+    if (
+      candidate.clinicalStageRank > existingCandidate.clinicalStageRank
+    ) {
+      bestCandidateByDrug.set(key, candidate);
+      continue;
+    }
+
+    if (
+      candidate.clinicalStageRank ===
+        existingCandidate.clinicalStageRank &&
+      candidate.isDirectCanonicalName &&
+      !existingCandidate.isDirectCanonicalName
+    ) {
+      bestCandidateByDrug.set(key, candidate);
+    }
+  }
+
+  return Array.from(bestCandidateByDrug.values())
     .sort((first, second) => {
       if (second.clinicalStageRank !== first.clinicalStageRank) {
         return second.clinicalStageRank - first.clinicalStageRank;
       }
 
-      return first.name.localeCompare(second.name);
-    });
-
-  const names: string[] = [];
-  const seenNames = new Set<string>();
-
-  for (const candidate of candidates) {
-    const trimmedName = candidate.name.trim();
-    const normalisedName = trimmedName.toLowerCase();
-
-    if (!normalisedName || seenNames.has(normalisedName)) {
-      continue;
-    }
-
-    seenNames.add(normalisedName);
-    names.push(trimmedName);
-  }
-
-  return names;
+      return first.canonicalName.localeCompare(second.canonicalName);
+    })
+    .map((candidate) => candidate.canonicalName);
 }
 
 function readTargetDetail(
   payload: unknown,
+  efoId: string,
 ): TargetDetailResult | null {
   const data = readGraphQlData(payload);
 
@@ -642,6 +811,7 @@ function readTargetDetail(
     tractability: buildTractabilitySummary(tractabilityBuckets),
     knownDrugs: collectKnownDrugNames(
       target.drugAndClinicalCandidates,
+      efoId,
     ),
     source: {
       id: `ot-target:${target.id}`,
@@ -709,16 +879,22 @@ export async function getAssociatedTargets(
 
 export async function getTargetDetail(
   ensemblId: string,
+  efoId: string,
 ): Promise<TargetDetailResult | null> {
   const trimmedEnsemblId = ensemblId.trim();
+  const trimmedEfoId = efoId.trim();
 
   if (!trimmedEnsemblId) {
     throw new Error("Ensembl ID is required.");
+  }
+
+  if (!trimmedEfoId) {
+    throw new Error("EFO ID is required.");
   }
 
   const payload = await requestOpenTargets(TARGET_DETAIL_QUERY, {
     ensemblId: trimmedEnsemblId,
   });
 
-  return readTargetDetail(payload);
+  return readTargetDetail(payload, trimmedEfoId);
 }
