@@ -32,6 +32,7 @@ export interface Paper {
   title: string;
   year: number | null;
   citationCount: number | null;
+  abstract: string | null;
   url: string;
 }
 

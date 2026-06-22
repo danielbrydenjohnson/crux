@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTrialsForTarget } from "@/lib/sources/clinicalTrials";
+import { getLiterature } from "@/lib/sources/europePmc";
 import {
   getAssociatedTargets,
   getTargetDetail,
@@ -78,11 +79,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const clinicalTrials = await getTrialsForTarget({
-      diseaseName: associatedTargets.disease.name,
-      targetSymbol: clinicalTarget.symbol,
-      knownDrugs: targetDetail.knownDrugs,
-    });
+    const [clinicalTrials, literature] = await Promise.all([
+      getTrialsForTarget({
+        diseaseName: associatedTargets.disease.name,
+        targetSymbol: clinicalTarget.symbol,
+        knownDrugs: targetDetail.knownDrugs,
+      }),
+      getLiterature(
+        clinicalTarget.symbol,
+        associatedTargets.disease.name,
+      ),
+    ]);
 
     return NextResponse.json({
       ok: true,
@@ -90,6 +97,7 @@ export async function POST(request: Request) {
       selectedTarget: clinicalTarget,
       targetDetail,
       clinicalTrials,
+      literature,
     });
   } catch (error) {
     console.error("Brief data lookup failed:", error);
