@@ -99,7 +99,7 @@ export interface TargetBrief {
   caseFor: Claim[];
   caseAgainst: Claim[];
   confidence: "high" | "moderate" | "low";
-  confidenceRationale: string;
+  confidenceRationale: Claim;
 }
 
 export interface Brief {
@@ -108,8 +108,8 @@ export interface Brief {
     efoId: string;
     diseaseName: string;
   };
-  overallSummary: string;
-  headline: string;
+  overallSummary: Claim[];
+  headline: Claim;
   targets: TargetBrief[];
   sources: Source[];
   generatedAt: string;
