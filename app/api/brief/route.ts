@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { assembleTargetEvidence } from "@/lib/orchestrate";
-import { getAssociatedTargets } from "@/lib/sources/openTargets";
+import { assembleEvidenceBundle } from "@/lib/orchestrate";
 
 interface BriefRequestBody {
   efoId?: unknown;
+  input?: unknown;
 }
 
 export async function POST(request: Request) {
@@ -31,10 +31,26 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
-    const associatedTargets = await getAssociatedTargets(body.efoId);
+  if (
+    body.input !== undefined &&
+    typeof body.input !== "string"
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "input must be a string when provided.",
+      },
+      { status: 400 },
+    );
+  }
 
-    if (!associatedTargets) {
+  try {
+    const evidenceBundle = await assembleEvidenceBundle({
+      efoId: body.efoId,
+      input: body.input,
+    });
+
+    if (!evidenceBundle) {
       return NextResponse.json(
         {
           ok: false,
@@ -44,34 +60,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const clinicalTarget = associatedTargets.targets.find((target) =>
-      target.evidenceBreakdown.some(
-        (evidence) => evidence.id === "clinical",
-      ),
-    );
-
-    if (!clinicalTarget) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "No target with clinical evidence was found.",
-        },
-        { status: 404 },
-      );
-    }
-
-    const targetEvidence = await assembleTargetEvidence({
-      target: clinicalTarget,
-      disease: associatedTargets.disease,
-    });
-
     return NextResponse.json({
       ok: true,
-      disease: associatedTargets.disease,
-      targetEvidence,
+      evidenceBundle,
     });
   } catch (error) {
-    console.error("Brief data lookup failed:", error);
+    console.error("Evidence bundle assembly failed:", error);
 
     return NextResponse.json(
       {

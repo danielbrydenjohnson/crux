@@ -27,6 +27,15 @@ export interface Trial {
   url: string;
 }
 
+export type TrialLinkageMethod =
+  | "known_drug"
+  | "target_keyword";
+
+export interface TrialLinkage {
+  method: TrialLinkageMethod;
+  searchedTerms: string[];
+}
+
 export interface Paper {
   id: string;
   title: string;
@@ -51,6 +60,7 @@ export interface TargetEvidence {
   tractability: TractabilitySummary;
   knownDrugs: string[];
   trials: Trial[];
+  trialLinkage: TrialLinkage;
   literature: Paper[];
   sources: Source[];
 }
