@@ -3,12 +3,23 @@
 import {
   type ChangeEvent,
   type FormEvent,
+  useEffect,
+  useRef,
   useState,
 } from "react";
 import {
   DisambiguationList,
   type DiseaseMatch,
 } from "@/components/ask/DisambiguationList";
+import { BriefDocument } from "@/components/brief/BriefDocument";
+import { WorkingStepper } from "@/components/working/WorkingStepper";
+import {
+  INITIAL_BRIEF_PROGRESS_STATE,
+  createStartingBriefProgressState,
+  reduceBriefProgress,
+  type BriefProgressState,
+} from "@/lib/client/briefProgress";
+import { readBriefStream } from "@/lib/client/readBriefStream";
 
 interface DiseaseResolution extends DiseaseMatch {
   alternatives: DiseaseMatch[];
@@ -76,6 +87,16 @@ function requiresDisambiguation(
   );
 }
 
+function isBriefBuilding(
+  progress: BriefProgressState,
+): boolean {
+  return (
+    progress.stage === "starting" ||
+    progress.stage === "gathering" ||
+    progress.stage === "synthesising"
+  );
+}
+
 export function SearchAsk() {
   const [diseaseName, setDiseaseName] = useState("");
   const [isResolving, setIsResolving] = useState(false);
@@ -84,6 +105,30 @@ export function SearchAsk() {
   const [selectedDisease, setSelectedDisease] =
     useState<DiseaseMatch | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [briefProgress, setBriefProgress] =
+    useState<BriefProgressState>(
+      INITIAL_BRIEF_PROGRESS_STATE,
+    );
+
+  const briefAbortController =
+    useRef<AbortController | null>(null);
+
+  const briefIsBuilding =
+    isBriefBuilding(briefProgress);
+  const interfaceIsBusy =
+    isResolving || briefIsBuilding;
+
+  useEffect(() => {
+    return () => {
+      briefAbortController.current?.abort();
+    };
+  }, []);
+
+  function resetBriefProgress() {
+    briefAbortController.current?.abort();
+    briefAbortController.current = null;
+    setBriefProgress(INITIAL_BRIEF_PROGRESS_STATE);
+  }
 
   async function resolveDisease(query: string) {
     const trimmedQuery = query.trim();
@@ -92,9 +137,11 @@ export function SearchAsk() {
       setError("Enter a disease to continue.");
       setResolution(null);
       setSelectedDisease(null);
+      resetBriefProgress();
       return;
     }
 
+    resetBriefProgress();
     setDiseaseName(trimmedQuery);
     setIsResolving(true);
     setError(null);
@@ -148,7 +195,86 @@ export function SearchAsk() {
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function buildBrief(disease: DiseaseMatch) {
+    briefAbortController.current?.abort();
+
+    const controller = new AbortController();
+    briefAbortController.current = controller;
+
+    setError(null);
+    setBriefProgress(
+      createStartingBriefProgressState({
+        efoId: disease.efoId,
+        name: disease.name,
+      }),
+    );
+
+    let receivedTerminalEvent = false;
+
+    try {
+      const response = await fetch("/api/brief", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          efoId: disease.efoId,
+          input: disease.name,
+        }),
+        signal: controller.signal,
+      });
+
+      await readBriefStream(response, (event) => {
+        if (
+          event.type === "complete" ||
+          event.type === "error"
+        ) {
+          receivedTerminalEvent = true;
+        }
+
+        setBriefProgress((currentProgress) =>
+          reduceBriefProgress(
+            currentProgress,
+            event,
+          ),
+        );
+      });
+
+      if (!receivedTerminalEvent) {
+        setBriefProgress((currentProgress) => ({
+          ...currentProgress,
+          stage: "error",
+          error:
+            "The brief stream ended before completion.",
+        }));
+      }
+    } catch (caughtError) {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Couldn't build the target brief.";
+
+      setBriefProgress((currentProgress) => ({
+        ...currentProgress,
+        stage: "error",
+        error: message,
+      }));
+    } finally {
+      if (
+        briefAbortController.current === controller
+      ) {
+        briefAbortController.current = null;
+      }
+    }
+  }
+
+  function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
     void resolveDisease(diseaseName);
   }
@@ -161,6 +287,7 @@ export function SearchAsk() {
     setDiseaseName(nextValue);
     setError(null);
     setResolution(null);
+    resetBriefProgress();
 
     if (
       selectedDisease &&
@@ -176,8 +303,16 @@ export function SearchAsk() {
   }
 
   function handleDiseaseSelect(match: DiseaseMatch) {
+    resetBriefProgress();
     setDiseaseName(match.name);
     setSelectedDisease(match);
+    setResolution(null);
+    setError(null);
+  }
+
+  function handleChangeDisease() {
+    resetBriefProgress();
+    setSelectedDisease(null);
     setResolution(null);
     setError(null);
   }
@@ -210,7 +345,10 @@ export function SearchAsk() {
           className="mt-10"
           noValidate
         >
-          <label htmlFor="disease-name" className="sr-only">
+          <label
+            htmlFor="disease-name"
+            className="sr-only"
+          >
             Enter a disease
           </label>
 
@@ -221,7 +359,7 @@ export function SearchAsk() {
               type="search"
               value={diseaseName}
               onChange={handleInputChange}
-              disabled={isResolving}
+              disabled={interfaceIsBusy}
               aria-invalid={error ? true : undefined}
               aria-describedby="disease-search-support"
               autoComplete="off"
@@ -231,11 +369,11 @@ export function SearchAsk() {
 
             <button
               type="submit"
-              disabled={isResolving}
-              aria-label="Build brief"
+              disabled={interfaceIsBusy}
+              aria-label="Resolve disease"
               className="absolute right-2 top-2 flex h-12 w-12 items-center justify-center rounded-control bg-accent font-ui text-[22px] text-white transition-colors hover:bg-accent-deep disabled:cursor-wait disabled:opacity-70"
             >
-              {isResolving ? (
+              {interfaceIsBusy ? (
                 <span aria-hidden="true">···</span>
               ) : (
                 <span aria-hidden="true">→</span>
@@ -255,7 +393,7 @@ export function SearchAsk() {
               <button
                 key={example.label}
                 type="button"
-                disabled={isResolving}
+                disabled={interfaceIsBusy}
                 onClick={() =>
                   handleExampleClick(example.query)
                 }
@@ -273,11 +411,34 @@ export function SearchAsk() {
         </p>
 
         <div
-          aria-live="polite"
-          aria-busy={isResolving}
+          aria-busy={interfaceIsBusy}
           className="mt-6 min-h-[20rem]"
         >
-          {isResolving ? (
+          {briefProgress.stage === "complete" &&
+          briefProgress.brief ? (
+            <BriefDocument
+              brief={briefProgress.brief}
+            />
+          ) : briefProgress.stage !== "idle" ? (
+            <div>
+              <WorkingStepper
+                progress={briefProgress}
+              />
+
+              {briefProgress.stage === "error" &&
+              selectedDisease ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void buildBrief(selectedDisease)
+                  }
+                  className="mt-4 rounded-control bg-accent px-4 py-2.5 font-ui text-[13px] font-medium text-white transition-colors hover:bg-accent-deep"
+                >
+                  Try again
+                </button>
+              ) : null}
+            </div>
+          ) : isResolving ? (
             <section
               role="status"
               className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
@@ -287,12 +448,11 @@ export function SearchAsk() {
               </p>
 
               <p className="mt-3 font-ui text-[14px] leading-[1.55] text-slate">
-                Checking Open Targets for the intended disease.
+                Checking Open Targets for the intended
+                disease.
               </p>
             </section>
-          ) : null}
-
-          {!isResolving && error ? (
+          ) : error ? (
             <section
               role="alert"
               className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
@@ -305,17 +465,13 @@ export function SearchAsk() {
                 {error}
               </p>
             </section>
-          ) : null}
-
-          {!isResolving && resolution ? (
+          ) : resolution ? (
             <DisambiguationList
               matches={diseaseOptions}
               disabled={false}
               onSelect={handleDiseaseSelect}
             />
-          ) : null}
-
-          {!isResolving && selectedDisease ? (
+          ) : selectedDisease ? (
             <section
               aria-labelledby="resolved-disease-heading"
               className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
@@ -346,19 +502,28 @@ export function SearchAsk() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedDisease(null);
-                    setResolution(null);
-                  }}
+                  onClick={handleChangeDisease}
                   className="self-start font-ui text-[13px] font-medium text-accent hover:text-accent-deep"
                 >
                   Change
                 </button>
               </div>
 
-              <p className="mt-4 border-t border-hairline pt-4 font-ui text-[13px] text-slate">
-                Ready to assemble the target brief.
-              </p>
+              <div className="mt-4 flex flex-col gap-3 border-t border-hairline pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="font-ui text-[13px] text-slate">
+                  Ready to assemble the target brief.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void buildBrief(selectedDisease)
+                  }
+                  className="self-start rounded-control bg-accent px-4 py-2.5 font-ui text-[13px] font-medium text-white transition-colors hover:bg-accent-deep sm:self-auto"
+                >
+                  Build brief
+                </button>
+              </div>
             </section>
           ) : null}
         </div>
