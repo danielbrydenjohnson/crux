@@ -269,6 +269,70 @@ function stripJsonCodeFence(rawText: string): string {
     .trim();
 }
 
+function extractJsonObject(rawText: string): string {
+  const strippedText =
+    stripJsonCodeFence(rawText);
+
+  const objectStart =
+    strippedText.indexOf("{");
+
+  if (objectStart === -1) {
+    return strippedText;
+  }
+
+  let depth = 0;
+  let insideString = false;
+  let escaping = false;
+
+  for (
+    let index = objectStart;
+    index < strippedText.length;
+    index += 1
+  ) {
+    const character = strippedText[index];
+
+    if (insideString) {
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+
+      if (character === "\\") {
+        escaping = true;
+        continue;
+      }
+
+      if (character === '"') {
+        insideString = false;
+      }
+
+      continue;
+    }
+
+    if (character === '"') {
+      insideString = true;
+      continue;
+    }
+
+    if (character === "{") {
+      depth += 1;
+      continue;
+    }
+
+    if (character === "}") {
+      depth -= 1;
+
+      if (depth === 0) {
+        return strippedText
+          .slice(objectStart, index + 1)
+          .trim();
+      }
+    }
+  }
+
+  return strippedText.slice(objectStart).trim();
+}
+
 function getAnthropicConfiguration(): {
   apiKey: string;
   model: string;
@@ -512,6 +576,7 @@ function validateCitation(
   path: string,
   allowedSourceIds: Set<string>,
   errors: string[],
+  fallbackSourceId: string | null = null,
 ): SynthesisCitation | null {
   if (!isRecord(value)) {
     errors.push(`${path} must be an object.`);
@@ -527,14 +592,9 @@ function validateCitation(
     return null;
   }
 
-  if (sourceIdsValue.length === 0) {
-    errors.push(
-      `${path}.sourceIds must contain at least one source id.`,
-    );
-    return null;
-  }
-
-  const sourceIds: string[] = [];
+  const validSourceIds: string[] = [];
+  const removedSourceIds: string[] = [];
+  let replacementSourceId: string | null = null;
 
   sourceIdsValue.forEach(
     (sourceId, index) => {
@@ -549,17 +609,45 @@ function validateCitation(
       }
 
       if (!allowedSourceIds.has(sourceId)) {
-        errors.push(
-          `${path}.sourceIds contains source id "${sourceId}" that is not valid for this claim.`,
-        );
+        removedSourceIds.push(sourceId);
+        return;
       }
 
-      sourceIds.push(sourceId);
+      if (!validSourceIds.includes(sourceId)) {
+        validSourceIds.push(sourceId);
+      }
     },
   );
 
+  if (
+    validSourceIds.length === 0 &&
+    fallbackSourceId &&
+    allowedSourceIds.has(fallbackSourceId)
+  ) {
+    validSourceIds.push(fallbackSourceId);
+    replacementSourceId = fallbackSourceId;
+  }
+
+  if (removedSourceIds.length > 0) {
+    console.warn(
+      "Synthesis citation was normalised:",
+      {
+        path,
+        removedSourceIds,
+        replacementSourceId,
+      },
+    );
+  }
+
+  if (validSourceIds.length === 0) {
+    errors.push(
+      `${path}.sourceIds must contain at least one valid source id.`,
+    );
+    return null;
+  }
+
   return {
-    sourceIds,
+    sourceIds: validSourceIds,
   };
 }
 
@@ -570,6 +658,7 @@ function validateClaim(
   maximumWords: number,
   errors: string[],
   minimumWords = 1,
+  fallbackSourceId: string | null = null,
 ): SynthesisClaim | null {
   if (!isRecord(value)) {
     errors.push(`${path} must be an object.`);
@@ -607,6 +696,7 @@ function validateClaim(
     `${path}.citation`,
     allowedSourceIds,
     errors,
+    fallbackSourceId,
   );
 
   if (!citation) {
@@ -626,6 +716,7 @@ function validateSingleClaimArray(
   maximumWords: number,
   minimumWords: number,
   errors: string[],
+  fallbackSourceId: string | null = null,
 ): SynthesisClaim[] {
   if (!Array.isArray(value)) {
     errors.push(`${path} must be an array.`);
@@ -649,6 +740,7 @@ function validateSingleClaimArray(
         maximumWords,
         errors,
         minimumWords,
+        fallbackSourceId,
       );
 
       if (claim) {
@@ -722,12 +814,33 @@ function validateTargetDraft(
     ),
   );
 
+  const firstSourceIdOfType = (
+    sourceType: Source["type"],
+  ): string | null =>
+    expectedTarget.sources.find(
+      (source) => source.type === sourceType,
+    )?.id ?? null;
+
+  const openTargetsFallback =
+    firstSourceIdOfType("open_targets");
+  const trialFallback =
+    firstSourceIdOfType("clinical_trial");
+  const literatureFallback =
+    firstSourceIdOfType("literature");
+  const generalFallback =
+    openTargetsFallback ??
+    literatureFallback ??
+    trialFallback ??
+    null;
+
   const literatureAngle = validateClaim(
     value.literatureAngle,
     `${path}.literatureAngle`,
     allowedSourceIds,
     LITERATURE_ANGLE_MAX_WORDS,
     errors,
+    1,
+    literatureFallback ?? generalFallback,
   );
 
   const competitiveLandscapeSummary =
@@ -737,6 +850,8 @@ function validateTargetDraft(
       allowedSourceIds,
       COMPETITIVE_SUMMARY_MAX_WORDS,
       errors,
+      1,
+      trialFallback ?? generalFallback,
     );
 
   const caseFor =
@@ -747,6 +862,7 @@ function validateTargetDraft(
       CASE_FOR_MAX_WORDS,
       MIN_SUBSTANTIVE_CLAIM_WORDS,
       errors,
+      openTargetsFallback ?? generalFallback,
     );
 
   const caseAgainst =
@@ -757,6 +873,7 @@ function validateTargetDraft(
       CASE_AGAINST_MAX_WORDS,
       MIN_SUBSTANTIVE_CLAIM_WORDS,
       errors,
+      openTargetsFallback ?? generalFallback,
     );
 
   const confidence = validateConfidence(
@@ -771,6 +888,8 @@ function validateTargetDraft(
     allowedSourceIds,
     CONFIDENCE_RATIONALE_MAX_WORDS,
     errors,
+    1,
+    openTargetsFallback ?? generalFallback,
   );
 
   if (
@@ -804,7 +923,7 @@ export function parseAndValidateSynthesisDraft(
 ): SynthesisDraft {
   const errors: string[] = [];
   const jsonText =
-    stripJsonCodeFence(rawText);
+    extractJsonObject(rawText);
 
   let parsed: unknown;
 

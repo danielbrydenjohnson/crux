@@ -20,6 +20,11 @@ import {
   type BriefProgressState,
 } from "@/lib/client/briefProgress";
 import { readBriefStream } from "@/lib/client/readBriefStream";
+import {
+  clearLatestBrief,
+  loadLatestBrief,
+  saveLatestBrief,
+} from "@/lib/client/briefStorage";
 
 interface DiseaseResolution extends DiseaseMatch {
   alternatives: DiseaseMatch[];
@@ -105,6 +110,8 @@ export function SearchAsk() {
   const [selectedDisease, setSelectedDisease] =
     useState<DiseaseMatch | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [briefWasSaved, setBriefWasSaved] =
+    useState(false);
   const [briefProgress, setBriefProgress] =
     useState<BriefProgressState>(
       INITIAL_BRIEF_PROGRESS_STATE,
@@ -115,11 +122,47 @@ export function SearchAsk() {
 
   const briefIsBuilding =
     isBriefBuilding(briefProgress);
+  const hasCompletedBrief =
+    briefProgress.stage === "complete" &&
+    briefProgress.brief !== null;
   const interfaceIsBusy =
     isResolving || briefIsBuilding;
+  const searchControlsDisabled =
+    interfaceIsBusy || hasCompletedBrief;
 
   useEffect(() => {
+    const restoreTimer = window.setTimeout(() => {
+      const storedSnapshot = loadLatestBrief();
+
+      if (!storedSnapshot) {
+        return;
+      }
+
+      const { brief, disease } = storedSnapshot;
+
+      setDiseaseName(disease.name);
+      setSelectedDisease(disease);
+      setBriefWasSaved(true);
+      setBriefProgress({
+        stage: "complete",
+        disease: {
+          efoId: disease.efoId,
+          name: disease.name,
+        },
+        targetCount: brief.targets.length,
+        completedTargetCount: brief.targets.length,
+        targets: brief.targets.map((target) => ({
+          ensemblId: target.ensemblId,
+          symbol: target.symbol,
+          complete: true,
+        })),
+        brief,
+        error: null,
+      });
+    }, 0);
+
     return () => {
+      window.clearTimeout(restoreTimer);
       briefAbortController.current?.abort();
     };
   }, []);
@@ -128,6 +171,16 @@ export function SearchAsk() {
     briefAbortController.current?.abort();
     briefAbortController.current = null;
     setBriefProgress(INITIAL_BRIEF_PROGRESS_STATE);
+  }
+
+  function handleStartAnotherDisease() {
+    clearLatestBrief();
+    resetBriefProgress();
+    setDiseaseName("");
+    setSelectedDisease(null);
+    setResolution(null);
+    setError(null);
+    setBriefWasSaved(false);
   }
 
   async function resolveDisease(query: string) {
@@ -202,6 +255,7 @@ export function SearchAsk() {
     briefAbortController.current = controller;
 
     setError(null);
+    setBriefWasSaved(false);
     setBriefProgress(
       createStartingBriefProgressState({
         efoId: disease.efoId,
@@ -230,6 +284,20 @@ export function SearchAsk() {
           event.type === "error"
         ) {
           receivedTerminalEvent = true;
+        }
+
+        if (event.type === "complete") {
+          const saved = saveLatestBrief({
+            disease: {
+              efoId: disease.efoId,
+              name: disease.name,
+              description:
+                disease.description ?? null,
+            },
+            brief: event.brief,
+          });
+
+          setBriefWasSaved(saved);
         }
 
         setBriefProgress((currentProgress) =>
@@ -359,19 +427,19 @@ export function SearchAsk() {
               type="search"
               value={diseaseName}
               onChange={handleInputChange}
-              disabled={interfaceIsBusy}
+              disabled={searchControlsDisabled}
               aria-invalid={error ? true : undefined}
               aria-describedby="disease-search-support"
               autoComplete="off"
               placeholder="Enter a disease..."
-              className="h-16 w-full rounded-control border border-hairline bg-surface pl-5 pr-16 font-ui text-[16px] text-ink shadow-brief transition-colors hover:border-mist focus:border-accent disabled:cursor-wait disabled:bg-surface-sunk"
+              className="h-16 w-full rounded-control border border-hairline bg-surface pl-5 pr-16 font-ui text-[16px] text-ink shadow-brief transition-colors hover:border-mist focus:border-accent disabled:cursor-not-allowed disabled:bg-surface-sunk"
             />
 
             <button
               type="submit"
-              disabled={interfaceIsBusy}
+              disabled={searchControlsDisabled}
               aria-label="Resolve disease"
-              className="absolute right-2 top-2 flex h-12 w-12 items-center justify-center rounded-control bg-accent font-ui text-[22px] text-white transition-colors hover:bg-accent-deep disabled:cursor-wait disabled:opacity-70"
+              className="absolute right-2 top-2 flex h-12 w-12 items-center justify-center rounded-control bg-accent font-ui text-[22px] text-white transition-colors hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-70"
             >
               {interfaceIsBusy ? (
                 <span aria-hidden="true">···</span>
@@ -393,11 +461,11 @@ export function SearchAsk() {
               <button
                 key={example.label}
                 type="button"
-                disabled={interfaceIsBusy}
+                disabled={searchControlsDisabled}
                 onClick={() =>
                   handleExampleClick(example.query)
                 }
-                className="rounded-full bg-accent-tint px-3 py-1.5 font-ui text-[13px] font-medium text-accent transition-colors hover:bg-evidence-1 disabled:cursor-wait disabled:opacity-60"
+                className="rounded-full bg-accent-tint px-3 py-1.5 font-ui text-[13px] font-medium text-accent transition-colors hover:bg-evidence-1 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {example.label}
               </button>
@@ -416,9 +484,30 @@ export function SearchAsk() {
         >
           {briefProgress.stage === "complete" &&
           briefProgress.brief ? (
-            <BriefDocument
-              brief={briefProgress.brief}
-            />
+            <div>
+              <section
+                aria-label="Saved brief controls"
+                className="mb-6 flex flex-col gap-3 rounded-panel border border-hairline bg-surface p-4 shadow-brief sm:flex-row sm:items-center sm:justify-between"
+              >
+                <p className="font-ui text-[13px] leading-[1.5] text-slate">
+                  {briefWasSaved
+                    ? "Saved in this browser for 14 days."
+                    : "This brief could not be saved in this browser."}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleStartAnotherDisease}
+                  className="self-start font-ui text-[13px] font-medium text-accent hover:text-accent-deep sm:self-auto"
+                >
+                  Start another disease
+                </button>
+              </section>
+
+              <BriefDocument
+                brief={briefProgress.brief}
+              />
+            </div>
           ) : briefProgress.stage !== "idle" ? (
             <div>
               <WorkingStepper

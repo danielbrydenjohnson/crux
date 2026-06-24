@@ -216,3 +216,107 @@ svg {
     transition-duration: 0.01ms !important;
   }
 }
+
+@page {
+  size: A4 portrait;
+  margin: 14mm 15mm 16mm;
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    min-width: 0;
+    min-height: auto;
+    background: #ffffff !important;
+  }
+
+  body {
+    margin: 0;
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .brief-document,
+  .brief-document * {
+    visibility: visible;
+  }
+
+  .brief-document {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .brief-document button {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+  }
+
+  .brief-document [role="tooltip"] {
+    display: none !important;
+  }
+
+  .brief-document a {
+    text-decoration: underline;
+    text-decoration-color: var(--hairline);
+    text-underline-offset: 2px;
+  }
+
+  .print-target-section {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-target-section > header {
+    break-after: avoid-page;
+    page-break-after: avoid;
+  }
+
+  .print-avoid-break {
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  .brief-document h1,
+  .brief-document h2,
+  .brief-document h3 {
+    break-after: avoid-page;
+    page-break-after: avoid;
+  }
+
+  .brief-document p,
+  .brief-document li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  .brief-document section[aria-labelledby="brief-sources-heading"] {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .brief-document section[aria-labelledby="brief-sources-heading"] li {
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+}

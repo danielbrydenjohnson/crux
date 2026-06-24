@@ -60,9 +60,9 @@ export function TargetSection({
     <section
       id={sectionId}
       aria-labelledby={headingId}
-      className="border-b border-hairline py-10 last:border-b-0"
+      className="print-target-section border-b border-hairline py-10 last:border-b-0"
     >
-      <header>
+      <header className="print-avoid-break">
         <p className="font-ui text-[11px] font-medium uppercase tracking-[0.1em] text-mist">
           Target {rank}
         </p>
@@ -113,7 +113,7 @@ export function TargetSection({
 
       <div className="mt-8 grid gap-8 md:grid-cols-[minmax(0,1fr)_16rem]">
         <div className="space-y-7">
-          <section>
+          <section className="print-avoid-break">
             <h3 className="font-document text-[18px] font-semibold leading-[1.35] text-ink">
               Tractability
             </h3>
@@ -125,7 +125,7 @@ export function TargetSection({
             />
           </section>
 
-          <section>
+          <section className="print-avoid-break">
             <div className="flex flex-wrap items-baseline justify-between gap-3">
               <h3 className="font-document text-[18px] font-semibold leading-[1.35] text-ink">
                 Competitive landscape
@@ -149,7 +149,7 @@ export function TargetSection({
             />
           </section>
 
-          <section>
+          <section className="print-avoid-break">
             <h3 className="font-document text-[18px] font-semibold leading-[1.35] text-ink">
               Literature angle
             </h3>
@@ -162,7 +162,7 @@ export function TargetSection({
           </section>
         </div>
 
-        <aside className="rounded-panel border border-hairline bg-surface-sunk p-5">
+        <aside className="print-avoid-break rounded-panel border border-hairline bg-surface-sunk p-5">
           <EvidenceBreakdown
             evidence={target.evidenceBreakdown}
             headingId={evidenceHeadingId}
@@ -171,7 +171,7 @@ export function TargetSection({
       </div>
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2">
-        <section className="rounded-panel border border-hairline bg-surface p-5">
+        <section className="print-avoid-break rounded-panel border border-hairline bg-surface p-5">
           <h3 className="font-ui text-[12px] font-semibold uppercase tracking-[0.08em] text-accent">
             Case for
           </h3>
@@ -205,7 +205,7 @@ export function TargetSection({
           )}
         </section>
 
-        <section className="rounded-panel border border-hairline bg-surface-sunk p-5">
+        <section className="print-avoid-break rounded-panel border border-hairline bg-surface-sunk p-5">
           <h3 className="font-ui text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
             Case against
           </h3>
