@@ -52,6 +52,10 @@ const EXAMPLE_QUERIES = [
     label: "ALS",
     query: "amyotrophic lateral sclerosis",
   },
+  {
+    label: "Acute myeloid leukemia",
+    query: "acute myeloid leukemia",
+  },
 ];
 
 function normaliseDiseaseName(value: string): string {
@@ -339,218 +343,222 @@ export function SearchAsk() {
 
   return (
     <section className="w-full">
-      <div className="max-w-[45rem]">
+      <div className="max-w-[72rem]">
         <p className="mb-4 font-ui text-[13px] font-medium uppercase tracking-[0.12em] text-accent">
           Target intelligence
         </p>
 
-        <h1 className="max-w-[13ch] font-document text-[2.5rem] font-medium leading-[1.15] tracking-[-0.025em] text-ink sm:text-[3rem]">
-          Which targets should we pursue?
+        <h1 className="font-document text-[2.25rem] font-medium leading-[1.15] tracking-[-0.025em] text-ink [text-wrap:balance] sm:text-[2.75rem] lg:whitespace-nowrap lg:text-[3rem]">
+          Which targets should{" "}
+          <span className="whitespace-nowrap">
+            we pursue?
+          </span>
         </h1>
 
         <p className="mt-5 max-w-[42rem] font-ui text-[17px] leading-[1.6] text-slate">
-          Evidence-backed target intelligence for any
-          disease, in one brief.
+          See which targets are worth pursuing, and why.
         </p>
 
-        <form
-          onSubmit={handleSubmit}
-          className="mt-10"
-          noValidate
-        >
-          <label
-            htmlFor="disease-name"
-            className="sr-only"
+        <div className="max-w-[45rem]">
+          <form
+            onSubmit={handleSubmit}
+            className="mt-10"
+            noValidate
           >
-            Enter a disease
-          </label>
-
-          <div className="relative">
-            <input
-              id="disease-name"
-              name="diseaseName"
-              type="search"
-              value={diseaseName}
-              onChange={handleInputChange}
-              disabled={searchControlsDisabled}
-              aria-invalid={error ? true : undefined}
-              aria-describedby="disease-search-support"
-              autoComplete="off"
-              placeholder="Enter a disease..."
-              className="h-16 w-full rounded-control border border-hairline bg-surface pl-5 pr-16 font-ui text-[16px] text-ink shadow-brief transition-colors hover:border-mist focus:border-accent disabled:cursor-not-allowed disabled:bg-surface-sunk"
-            />
-
-            <button
-              type="submit"
-              disabled={searchControlsDisabled}
-              aria-label="Resolve disease"
-              className="absolute right-2 top-2 flex h-12 w-12 items-center justify-center rounded-control bg-accent font-ui text-[22px] text-white transition-colors hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-70"
+            <label
+              htmlFor="disease-name"
+              className="sr-only"
             >
-              {interfaceIsBusy ? (
-                <span aria-hidden="true">···</span>
-              ) : (
-                <span aria-hidden="true">→</span>
-              )}
-            </button>
-          </div>
+              Enter a disease
+            </label>
+
+            <div className="relative">
+              <input
+                id="disease-name"
+                name="diseaseName"
+                type="search"
+                value={diseaseName}
+                onChange={handleInputChange}
+                disabled={searchControlsDisabled}
+                aria-invalid={error ? true : undefined}
+                aria-describedby="disease-search-support"
+                autoComplete="off"
+                placeholder="Enter a disease..."
+                className="h-16 w-full rounded-control border border-hairline bg-surface pl-5 pr-16 font-ui text-[16px] text-ink shadow-brief transition-colors hover:border-mist focus:border-accent disabled:cursor-not-allowed disabled:bg-surface-sunk"
+              />
+
+              <button
+                type="submit"
+                disabled={searchControlsDisabled}
+                aria-label="Resolve disease"
+                className="absolute right-2 top-2 flex h-12 w-12 items-center justify-center rounded-control bg-accent font-ui text-[22px] text-white transition-colors hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {interfaceIsBusy ? (
+                  <span aria-hidden="true">···</span>
+                ) : (
+                  <span aria-hidden="true">→</span>
+                )}
+              </button>
+            </div>
+
+            <div
+              id="disease-search-support"
+              className="mt-4 flex flex-wrap items-center gap-2"
+            >
+              <span className="mr-1 font-ui text-[13px] text-mist">
+                Try:
+              </span>
+
+              {EXAMPLE_QUERIES.map((example) => (
+                <button
+                  key={example.label}
+                  type="button"
+                  disabled={searchControlsDisabled}
+                  onClick={() =>
+                    handleExampleClick(example.query)
+                  }
+                  className="rounded-full bg-accent-tint px-3 py-1.5 font-ui text-[13px] font-medium text-accent transition-colors hover:bg-evidence-1 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {example.label}
+                </button>
+              ))}
+            </div>
+          </form>
+
+          <p className="mt-8 max-w-[34rem] font-ui text-[12px] leading-[1.5] text-mist">
+            Sources: Open Targets · ClinicalTrials.gov ·
+            Europe PMC. Every substantive claim cited.
+          </p>
 
           <div
-            id="disease-search-support"
-            className="mt-4 flex flex-wrap items-center gap-2"
+            aria-busy={interfaceIsBusy}
+            className="mt-6 min-h-[20rem]"
           >
-            <span className="mr-1 font-ui text-[13px] text-mist">
-              Try:
-            </span>
-
-            {EXAMPLE_QUERIES.map((example) => (
-              <button
-                key={example.label}
-                type="button"
-                disabled={searchControlsDisabled}
-                onClick={() =>
-                  handleExampleClick(example.query)
-                }
-                className="rounded-full bg-accent-tint px-3 py-1.5 font-ui text-[13px] font-medium text-accent transition-colors hover:bg-evidence-1 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {example.label}
-              </button>
-            ))}
-          </div>
-        </form>
-
-        <p className="mt-8 max-w-[34rem] font-ui text-[12px] leading-[1.5] text-mist">
-          Sources: Open Targets · ClinicalTrials.gov ·
-          Europe PMC. Every substantive claim cited.
-        </p>
-
-        <div
-          aria-busy={interfaceIsBusy}
-          className="mt-6 min-h-[20rem]"
-        >
-          {briefProgress.stage === "complete" &&
-          briefProgress.brief ? (
-            <div>
-              <div className="mb-6 flex justify-end print:hidden">
-                <button
-                  type="button"
-                  onClick={handleStartAnotherDisease}
-                  className="font-ui text-[13px] font-medium text-accent hover:text-accent-deep"
-                >
-                  Start another disease
-                </button>
-              </div>
-
-              <BriefDocument
-                brief={briefProgress.brief}
-              />
-            </div>
-          ) : briefProgress.stage !== "idle" ? (
-            <div>
-              <WorkingStepper
-                progress={briefProgress}
-              />
-
-              {briefProgress.stage === "error" &&
-              selectedDisease ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    void buildBrief(selectedDisease)
-                  }
-                  className="mt-4 rounded-control bg-accent px-4 py-2.5 font-ui text-[13px] font-medium text-white transition-colors hover:bg-accent-deep"
-                >
-                  Try again
-                </button>
-              ) : null}
-            </div>
-          ) : isResolving ? (
-            <section
-              role="status"
-              className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
-            >
-              <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-accent">
-                Resolving disease
-              </p>
-
-              <p className="mt-3 font-ui text-[14px] leading-[1.55] text-slate">
-                Checking Open Targets for the intended
-                disease.
-              </p>
-            </section>
-          ) : error ? (
-            <section
-              role="alert"
-              className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
-            >
-              <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-status-stopped">
-                Disease not resolved
-              </p>
-
-              <p className="mt-3 font-ui text-[14px] font-medium leading-[1.55] text-status-stopped">
-                {error}
-              </p>
-            </section>
-          ) : resolution ? (
-            <DisambiguationList
-              matches={diseaseOptions}
-              disabled={false}
-              onSelect={handleDiseaseSelect}
-            />
-          ) : selectedDisease ? (
-            <section
-              aria-labelledby="resolved-disease-heading"
-              className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-accent">
-                    Resolved disease
-                  </p>
-
-                  <h2
-                    id="resolved-disease-heading"
-                    className="mt-2 font-document text-[22px] font-semibold leading-[1.3] text-ink"
+            {briefProgress.stage === "complete" &&
+            briefProgress.brief ? (
+              <div>
+                <div className="mb-6 flex justify-end print:hidden">
+                  <button
+                    type="button"
+                    onClick={handleStartAnotherDisease}
+                    className="font-ui text-[13px] font-medium text-accent hover:text-accent-deep"
                   >
-                    {selectedDisease.name}
-                  </h2>
-
-                  <p className="mt-2 font-data text-[13px] font-medium text-mist">
-                    {selectedDisease.efoId}
-                  </p>
-
-                  {selectedDisease.description ? (
-                    <p className="mt-3 max-w-[65ch] font-ui text-[13px] leading-[1.55] text-slate">
-                      {selectedDisease.description}
-                    </p>
-                  ) : null}
+                    Start another disease
+                  </button>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleChangeDisease}
-                  className="self-start font-ui text-[13px] font-medium text-accent hover:text-accent-deep"
-                >
-                  Change
-                </button>
+                <BriefDocument
+                  brief={briefProgress.brief}
+                />
               </div>
+            ) : briefProgress.stage !== "idle" ? (
+              <div>
+                <WorkingStepper
+                  progress={briefProgress}
+                />
 
-              <div className="mt-4 flex flex-col gap-3 border-t border-hairline pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="font-ui text-[13px] text-slate">
-                  Ready to assemble the target brief.
+                {briefProgress.stage === "error" &&
+                selectedDisease ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void buildBrief(selectedDisease)
+                    }
+                    className="mt-4 rounded-control bg-accent px-4 py-2.5 font-ui text-[13px] font-medium text-white transition-colors hover:bg-accent-deep"
+                  >
+                    Try again
+                  </button>
+                ) : null}
+              </div>
+            ) : isResolving ? (
+              <section
+                role="status"
+                className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
+              >
+                <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-accent">
+                  Resolving disease
                 </p>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    void buildBrief(selectedDisease)
-                  }
-                  className="self-start rounded-control bg-accent px-4 py-2.5 font-ui text-[13px] font-medium text-white transition-colors hover:bg-accent-deep sm:self-auto"
-                >
-                  Build brief
-                </button>
-              </div>
-            </section>
-          ) : null}
+                <p className="mt-3 font-ui text-[14px] leading-[1.55] text-slate">
+                  Checking Open Targets for the intended
+                  disease.
+                </p>
+              </section>
+            ) : error ? (
+              <section
+                role="alert"
+                className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
+              >
+                <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-status-stopped">
+                  Disease not resolved
+                </p>
+
+                <p className="mt-3 font-ui text-[14px] font-medium leading-[1.55] text-status-stopped">
+                  {error}
+                </p>
+              </section>
+            ) : resolution ? (
+              <DisambiguationList
+                matches={diseaseOptions}
+                disabled={false}
+                onSelect={handleDiseaseSelect}
+              />
+            ) : selectedDisease ? (
+              <section
+                aria-labelledby="resolved-disease-heading"
+                className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-accent">
+                      Resolved disease
+                    </p>
+
+                    <h2
+                      id="resolved-disease-heading"
+                      className="mt-2 font-document text-[22px] font-semibold leading-[1.3] text-ink"
+                    >
+                      {selectedDisease.name}
+                    </h2>
+
+                    <p className="mt-2 font-data text-[13px] font-medium text-mist">
+                      {selectedDisease.efoId}
+                    </p>
+
+                    {selectedDisease.description ? (
+                      <p className="mt-3 max-w-[65ch] font-ui text-[13px] leading-[1.55] text-slate">
+                        {selectedDisease.description}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleChangeDisease}
+                    className="self-start font-ui text-[13px] font-medium text-accent hover:text-accent-deep"
+                  >
+                    Change
+                  </button>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-3 border-t border-hairline pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="font-ui text-[13px] text-slate">
+                    Ready to assemble the target brief.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void buildBrief(selectedDisease)
+                    }
+                    className="self-start rounded-control bg-accent px-4 py-2.5 font-ui text-[13px] font-medium text-white transition-colors hover:bg-accent-deep sm:self-auto"
+                  >
+                    Build brief
+                  </button>
+                </div>
+              </section>
+            ) : null}
+          </div>
         </div>
       </div>
     </section>

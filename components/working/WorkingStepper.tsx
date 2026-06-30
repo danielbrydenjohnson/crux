@@ -22,6 +22,26 @@ function hasReachedStage(
   return stages.includes(currentStage);
 }
 
+function ActiveStepIndicator() {
+  return (
+    <span
+      aria-hidden="true"
+      className="ml-2 inline-flex shrink-0 items-center gap-1 text-accent"
+    >
+      {[0, 1, 2].map((dotIndex) => (
+        <span
+          key={dotIndex}
+          className="h-1.5 w-1.5 rounded-full bg-current opacity-25 motion-safe:animate-pulse motion-reduce:opacity-100"
+          style={{
+            animationDelay: `${dotIndex * 180}ms`,
+            animationDuration: "900ms",
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
 function WorkingStep({
   label,
   state,
@@ -48,14 +68,22 @@ function WorkingStep({
         aria-hidden="true"
         className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border font-ui text-[12px] font-semibold ${markerClasses}`}
       >
-        {state === "complete" ? "✓" : state === "active" ? "●" : "○"}
+        {state === "complete"
+          ? "✓"
+          : state === "active"
+            ? "●"
+            : "○"}
       </span>
 
       <div className="min-w-0 pt-0.5">
         <p
-          className={`font-ui text-[14px] font-medium leading-[1.4] ${labelClasses}`}
+          className={`flex items-center font-ui text-[14px] font-medium leading-[1.4] ${labelClasses}`}
         >
-          {label}
+          <span>{label}</span>
+
+          {state === "active" ? (
+            <ActiveStepIndicator />
+          ) : null}
         </p>
 
         {detail ? (
@@ -131,7 +159,8 @@ export function WorkingStepper({
       {progress.stage === "error" ? (
         <div role="alert" className="pt-5">
           <p className="font-ui text-[13px] font-medium text-status-stopped">
-            {progress.error ?? "The brief could not be completed."}
+            {progress.error ??
+              "The brief could not be completed."}
           </p>
         </div>
       ) : (
@@ -178,9 +207,14 @@ export function WorkingStepper({
                       }`}
                     >
                       <span>{target.symbol}</span>
-                      <span className="ml-1.5" aria-hidden="true">
+
+                      <span
+                        className="ml-1.5"
+                        aria-hidden="true"
+                      >
                         {target.complete ? "✓" : "···"}
                       </span>
+
                       <span className="sr-only">
                         {target.complete
                           ? " complete"
