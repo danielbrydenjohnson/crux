@@ -22,6 +22,7 @@ export interface BriefProgressState {
     name: string;
   } | null;
   targetCount: number;
+  totalTargetsAvailable: number;
   completedTargetCount: number;
   targets: BriefProgressTarget[];
   brief: Brief | null;
@@ -32,6 +33,7 @@ export const INITIAL_BRIEF_PROGRESS_STATE: BriefProgressState = {
   stage: "idle",
   disease: null,
   targetCount: 0,
+  totalTargetsAvailable: 0,
   completedTargetCount: 0,
   targets: [],
   brief: null,
@@ -69,6 +71,8 @@ export function reduceBriefProgress(
         stage: "gathering",
         disease: event.disease,
         targetCount: event.targetCount,
+        totalTargetsAvailable:
+          event.totalTargetsAvailable,
         completedTargetCount: 0,
         targets: event.targets.map((target) => ({
           ...target,
@@ -120,7 +124,10 @@ export function reduceBriefProgress(
           name: event.brief.query.diseaseName,
         },
         targetCount: event.brief.targets.length,
-        completedTargetCount: event.brief.targets.length,
+        totalTargetsAvailable:
+          event.brief.query.totalTargetsAvailable,
+        completedTargetCount:
+          event.brief.targets.length,
         brief: event.brief,
         error: null,
       };

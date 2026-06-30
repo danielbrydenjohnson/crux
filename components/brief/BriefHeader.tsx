@@ -18,10 +18,16 @@ function formatGeneratedDate(value: string): string {
   }).format(date);
 }
 
+function formatCount(value: number): string {
+  return new Intl.NumberFormat("en-GB").format(value);
+}
+
 export function BriefHeader({
   brief,
 }: BriefHeaderProps) {
-  const targetCount = brief.targets.length;
+  const analysedTargetCount = brief.targets.length;
+  const totalTargetsAvailable =
+    brief.query.totalTargetsAvailable;
   const sourceCount = brief.sources.length;
 
   return (
@@ -36,17 +42,26 @@ export function BriefHeader({
 
       <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-data text-[13px] font-medium text-mist">
         <span>{brief.query.efoId}</span>
+
         <span aria-hidden="true">·</span>
+
         <span>
-          {targetCount}{" "}
-          {targetCount === 1 ? "target" : "targets"}
+          Top {formatCount(analysedTargetCount)} of{" "}
+          {formatCount(totalTargetsAvailable)}{" "}
+          {totalTargetsAvailable === 1
+            ? "target"
+            : "targets"}
         </span>
+
         <span aria-hidden="true">·</span>
+
         <span>
-          {sourceCount}{" "}
+          {formatCount(sourceCount)}{" "}
           {sourceCount === 1 ? "source" : "sources"}
         </span>
+
         <span aria-hidden="true">·</span>
+
         <time dateTime={brief.generatedAt}>
           {formatGeneratedDate(brief.generatedAt)}
         </time>

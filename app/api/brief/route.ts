@@ -158,6 +158,8 @@ export async function POST(request: Request) {
                         progress.disease,
                       targetCount:
                         progress.targetCount,
+                      totalTargetsAvailable:
+                        progress.totalTargetsAvailable,
                       targets:
                         progress.targets,
                     });

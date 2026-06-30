@@ -27,6 +27,7 @@ export type BriefStreamEvent =
         name: string;
       };
       targetCount: number;
+      totalTargetsAvailable: number;
       targets: {
         ensemblId: string;
         symbol: string;

@@ -22,6 +22,10 @@ function hasReachedStage(
   return stages.includes(currentStage);
 }
 
+function formatCount(value: number): string {
+  return new Intl.NumberFormat("en-GB").format(value);
+}
+
 function ActiveStepIndicator() {
   return (
     <span
@@ -126,9 +130,15 @@ export function WorkingStepper({
         ? "active"
         : "pending";
 
+  const targetSelectionLabel =
+    progress.targetCount > 0 &&
+    progress.totalTargetsAvailable > 0
+      ? `Selected the top ${formatCount(progress.targetCount)} of ${formatCount(progress.totalTargetsAvailable)} by association strength`
+      : "Selecting top associated targets";
+
   const evidenceDetail =
     progress.targetCount > 0
-      ? `${progress.completedTargetCount} of ${progress.targetCount} targets complete`
+      ? `${formatCount(progress.completedTargetCount)} of ${formatCount(progress.targetCount)} targets complete`
       : undefined;
 
   return (
@@ -177,11 +187,7 @@ export function WorkingStepper({
             />
 
             <WorkingStep
-              label={
-                progress.targetCount > 0
-                  ? `Found ${progress.targetCount} associated targets`
-                  : "Finding associated targets"
-              }
+              label={targetSelectionLabel}
               state={targetsFoundState}
             />
 

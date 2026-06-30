@@ -32,6 +32,7 @@ export interface TargetsFoundProgress {
     name: string;
   };
   targetCount: number;
+  totalTargetsAvailable: number;
   targets: {
     ensemblId: string;
     symbol: string;
@@ -379,7 +380,7 @@ export async function assembleEvidenceBundle({
     return null;
   }
 
-  const totalTargets =
+  const analysedTargetCount =
     associatedTargets.targets.length;
 
   await progress?.onTargetsFound?.({
@@ -389,7 +390,9 @@ export async function assembleEvidenceBundle({
       name:
         associatedTargets.disease.name,
     },
-    targetCount: totalTargets,
+    targetCount: analysedTargetCount,
+    totalTargetsAvailable:
+      associatedTargets.totalCount,
     targets:
       associatedTargets.targets.map(
         (target) => ({
@@ -419,7 +422,7 @@ export async function assembleEvidenceBundle({
           ensemblId: target.ensemblId,
           symbol: target.symbol,
           completed: completedTargets,
-          total: totalTargets,
+          total: analysedTargetCount,
         });
 
         return targetEvidence;
@@ -437,6 +440,8 @@ export async function assembleEvidenceBundle({
         associatedTargets.disease.efoId,
       diseaseName:
         associatedTargets.disease.name,
+      totalTargetsAvailable:
+        associatedTargets.totalCount,
     },
     targets,
     assembledAt:

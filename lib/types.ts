@@ -70,6 +70,7 @@ export interface EvidenceBundle {
     input: string;
     efoId: string;
     diseaseName: string;
+    totalTargetsAvailable: number;
   };
   targets: TargetEvidence[];
   assembledAt: string;
@@ -120,6 +121,7 @@ export interface Brief {
     input: string;
     efoId: string;
     diseaseName: string;
+    totalTargetsAvailable: number;
   };
   overallSummary: Claim[];
   headline: Claim;
