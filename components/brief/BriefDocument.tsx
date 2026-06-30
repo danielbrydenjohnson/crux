@@ -1,6 +1,7 @@
 import { BriefHeader } from "@/components/brief/BriefHeader";
 import { BriefSummary } from "@/components/brief/BriefSummary";
 import { ExportBriefButton } from "@/components/brief/ExportBriefButton";
+import { RecommendationSection } from "@/components/brief/RecommendationSection";
 import { SourceList } from "@/components/brief/SourceList";
 import { TargetSection } from "@/components/brief/TargetSection";
 import type { Brief } from "@/lib/types";
@@ -21,6 +22,11 @@ export function BriefDocument({
       <article className="brief-document rounded-panel bg-surface p-6 shadow-brief sm:p-10">
         <BriefHeader brief={brief} />
         <BriefSummary brief={brief} />
+
+        <RecommendationSection
+          recommendation={brief.recommendation}
+          sources={brief.sources}
+        />
 
         <div>
           {brief.targets.map((target, index) => (
