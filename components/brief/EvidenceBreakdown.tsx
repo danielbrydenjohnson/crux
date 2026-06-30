@@ -43,15 +43,21 @@ export function EvidenceBreakdown({
         id={headingId}
         className="font-document text-[18px] font-semibold leading-[1.35] text-ink"
       >
-        Evidence breakdown
+        Open Targets evidence by type
       </h3>
 
+      <p className="mt-2 font-ui text-[12px] leading-[1.5] text-slate">
+        Independent category scores from 0 to 1. They do
+        not add up to the overall association score.
+      </p>
+
       {sortedEvidence.length === 0 ? (
-        <p className="mt-3 font-ui text-[13px] leading-[1.5] text-slate">
-          No evidence breakdown was returned for this target.
+        <p className="mt-4 font-ui text-[13px] leading-[1.5] text-slate">
+          No evidence breakdown was returned for this
+          target.
         </p>
       ) : (
-        <ul className="mt-4 space-y-4">
+        <ul className="mt-5 space-y-4">
           {sortedEvidence.map((item) => {
             const score = clampScore(item.score);
             const percentage = score * 100;
@@ -74,7 +80,7 @@ export function EvidenceBreakdown({
                   aria-valuemin={0}
                   aria-valuemax={1}
                   aria-valuenow={score}
-                  className="h-2 overflow-hidden rounded-full bg-surface-sunk"
+                  className="h-2 overflow-hidden rounded-full bg-surface"
                 >
                   <div
                     className={`h-full rounded-full ${getEvidenceColour(score)}`}

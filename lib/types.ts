@@ -84,6 +84,19 @@ export interface Claim {
   citation: Citation;
 }
 
+export interface RecommendationItem {
+  rank: number;
+  ensemblId: string;
+  symbol: string;
+  rationale: Claim;
+  caveat: Claim;
+}
+
+export interface Recommendation {
+  reasoning: string;
+  shortlist: RecommendationItem[];
+}
+
 export interface TargetBrief {
   ensemblId: string;
   symbol: string;
@@ -110,6 +123,7 @@ export interface Brief {
   };
   overallSummary: Claim[];
   headline: Claim;
+  recommendation: Recommendation;
   targets: TargetBrief[];
   sources: Source[];
   generatedAt: string;

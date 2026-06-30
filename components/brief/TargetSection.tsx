@@ -45,6 +45,14 @@ function formatAssociationScore(
   return clampScore(score).toFixed(3);
 }
 
+function getTrialCountLabel(
+  trialCount: number,
+): string {
+  return trialCount === 1
+    ? "linked trial found"
+    : "linked trials found";
+}
+
 export function TargetSection({
   target,
   sources,
@@ -64,43 +72,66 @@ export function TargetSection({
     >
       <header className="print-avoid-break">
         <p className="font-ui text-[11px] font-medium uppercase tracking-[0.1em] text-mist">
-          Target {rank}
+          Open Targets association rank {rank}
         </p>
 
-        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2
-              id={headingId}
-              className="font-document text-[28px] font-semibold leading-[1.15] tracking-[-0.02em] text-ink"
-            >
-              {target.symbol}
-            </h2>
+        <div className="mt-2">
+          <h2
+            id={headingId}
+            className="font-document text-[28px] font-semibold leading-[1.15] tracking-[-0.02em] text-ink"
+          >
+            {target.symbol}
+          </h2>
 
-            <p className="mt-1 font-ui text-[14px] leading-[1.5] text-slate">
-              {target.name}
-            </p>
+          <p className="mt-1 font-ui text-[14px] leading-[1.5] text-slate">
+            {target.name}
+          </p>
 
-            <p className="mt-2 font-data text-[12px] text-mist">
-              {target.ensemblId}
-            </p>
+          <p className="mt-2 font-data text-[12px] text-mist">
+            {target.ensemblId}
+          </p>
+        </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-control border border-hairline bg-surface-sunk px-4 py-3">
+            <span className="block font-ui text-[10px] font-medium uppercase tracking-[0.08em] text-mist">
+              Open Targets overall association
+            </span>
+
+            <span className="mt-1 block font-data text-[19px] font-semibold text-ink">
+              {formatAssociationScore(
+                target.associationScore,
+              )}
+              <span className="ml-1 text-[12px] font-medium text-mist">
+                / 1
+              </span>
+            </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="rounded-control border border-hairline bg-surface-sunk px-3 py-2">
-              <span className="block font-ui text-[10px] font-medium uppercase tracking-[0.08em] text-mist">
-                Association score
-              </span>
+          <div className="rounded-control border border-hairline bg-surface-sunk px-4 py-3">
+            <span className="block font-ui text-[10px] font-medium uppercase tracking-[0.08em] text-mist">
+              Linked clinical trials
+            </span>
 
-              <span className="mt-0.5 block font-data text-[15px] font-semibold text-ink">
-                {formatAssociationScore(
-                  target.associationScore,
-                )}
-              </span>
+            <span className="mt-1 block font-data text-[19px] font-semibold text-ink">
+              {trialCount}
+            </span>
+
+            <span className="mt-0.5 block font-ui text-[11px] text-slate">
+              {getTrialCountLabel(trialCount)}
+            </span>
+          </div>
+
+          <div className="rounded-control border border-hairline bg-surface px-4 py-3">
+            <span className="block font-ui text-[10px] font-medium uppercase tracking-[0.08em] text-mist">
+              Crux confidence
+            </span>
+
+            <div className="mt-2">
+              <ConfidenceChip
+                confidence={target.confidence}
+              />
             </div>
-
-            <ConfidenceChip
-              confidence={target.confidence}
-            />
           </div>
         </div>
 
@@ -126,18 +157,38 @@ export function TargetSection({
           </section>
 
           <section className="print-avoid-break">
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h3 className="font-document text-[18px] font-semibold leading-[1.35] text-ink">
-                Competitive landscape
-              </h3>
+            <h3 className="font-document text-[18px] font-semibold leading-[1.35] text-ink">
+              Competitive landscape
+            </h3>
 
-              <span className="font-data text-[12px] text-mist">
-                {trialCount}{" "}
-                {trialCount === 1
-                  ? "linked trial"
-                  : "linked trials"}
-              </span>
-            </div>
+            {trialCount === 0 ? (
+              <div className="mt-3 rounded-control border border-hairline bg-surface-sunk p-4">
+                <p className="font-ui text-[13px] font-semibold text-ink">
+                  No linked clinical trials found
+                </p>
+
+                <p className="mt-1 font-ui text-[12px] leading-[1.5] text-slate">
+                  No linked trials were present in the
+                  assembled evidence for this target and
+                  disease.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-control border border-accent bg-accent-tint p-4">
+                <p className="font-ui text-[13px] font-semibold text-accent-deep">
+                  {trialCount}{" "}
+                  {trialCount === 1
+                    ? "linked clinical trial found"
+                    : "linked clinical trials found"}
+                </p>
+
+                <p className="mt-1 font-ui text-[12px] leading-[1.5] text-slate">
+                  These trials were linked to this target
+                  and disease through the assembled
+                  evidence.
+                </p>
+              </div>
+            )}
 
             <CitedText
               claim={
@@ -145,7 +196,7 @@ export function TargetSection({
                   .summary
               }
               sources={sources}
-              className="mt-3 font-document text-[16px] leading-[1.65] text-ink"
+              className="mt-4 font-document text-[16px] leading-[1.65] text-ink"
             />
           </section>
 

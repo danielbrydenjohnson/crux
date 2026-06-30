@@ -11,8 +11,8 @@ import type {
   TractabilitySummary,
 } from "@/lib/types";
 
-const SYNTHESIS_MAX_OUTPUT_TOKENS = 8000;
-const SYNTHESIS_TIMEOUT_MS = 180000;
+const SYNTHESIS_MAX_OUTPUT_TOKENS = 12000;
+const SYNTHESIS_TIMEOUT_MS = 240000;
 const MAX_ABSTRACT_CHARACTERS = 1400;
 
 const HEADLINE_MAX_WORDS = 28;
@@ -22,6 +22,9 @@ const COMPETITIVE_SUMMARY_MAX_WORDS = 40;
 const CASE_FOR_MAX_WORDS = 35;
 const CASE_AGAINST_MAX_WORDS = 35;
 const CONFIDENCE_RATIONALE_MAX_WORDS = 35;
+const RECOMMENDATION_REASONING_MAX_WORDS = 45;
+const RECOMMENDATION_RATIONALE_MAX_WORDS = 45;
+const RECOMMENDATION_CAVEAT_MAX_WORDS = 35;
 
 const MIN_SUBSTANTIVE_CLAIM_WORDS = 8;
 
@@ -84,6 +87,19 @@ export interface SynthesisClaim {
   citation: SynthesisCitation;
 }
 
+export interface SynthesisRecommendationItem {
+  rank: number;
+  ensemblId: string;
+  symbol: string;
+  rationale: SynthesisClaim;
+  caveat: SynthesisClaim;
+}
+
+export interface SynthesisRecommendation {
+  reasoning: string;
+  shortlist: SynthesisRecommendationItem[];
+}
+
 export interface SynthesisTargetDraft {
   ensemblId: string;
   symbol: string;
@@ -98,6 +114,7 @@ export interface SynthesisTargetDraft {
 export interface SynthesisDraft {
   headline: SynthesisClaim;
   overallSummary: SynthesisClaim[];
+  recommendation: SynthesisRecommendation;
   targets: SynthesisTargetDraft[];
 }
 
@@ -119,7 +136,8 @@ export class SynthesisValidationError extends Error {
 export const SYNTHESIS_SYSTEM_PROMPT = `You are a senior biotech target-intelligence analyst. You are given a structured
 evidence bundle assembled from Open Targets, ClinicalTrials.gov, and Europe PMC for
 a specified disease. Produce a rigorous, decision-ready brief that helps a drug
-discovery or business development team decide which targets to pursue.
+discovery or business development team decide which targets to pursue, ending in a
+ranked recommendation.
 
 Hard rules:
 - Use ONLY the evidence in the provided bundle. Do not introduce any fact, drug,
@@ -136,6 +154,16 @@ Hard rules:
 - Distinguish strength of evidence honestly. An association driven by genetic
   evidence and known drugs is stronger than one driven mainly by literature
   co-occurrence. Reflect this in the confidence rating and rationale.
+
+Recommendation rules:
+- Produce a ranked shortlist of 3 to 5 targets most worth prioritising. Rank as an
+  analyst deciding where to place a bet, not by raw association score.
+- Explicitly weigh the competitive landscape. A crowded field can lower a strong
+  target; credible evidence with open competitive space can raise another target.
+- For each shortlisted target, provide a cited rationale grounded in that target's
+  evidence and competitive position, plus a cited caveat stating the specific catch.
+- The recommendation is a defensible suggestion that shows its work, not a verdict.
+  Do not imply certainty beyond the supplied evidence.
 - Write for an expert reader. Be concise and precise. No marketing language, no
   hedging filler, no restating the question.
 
@@ -159,6 +187,28 @@ const SYNTHESIS_DRAFT_SCHEMA_INSTRUCTIONS = `Return one JSON object with exactly
       }
     }
   ],
+  "recommendation": {
+    "reasoning": "string",
+    "shortlist": [
+      {
+        "rank": 1,
+        "ensemblId": "string",
+        "symbol": "string",
+        "rationale": {
+          "text": "string",
+          "citation": {
+            "sourceIds": ["source-id"]
+          }
+        },
+        "caveat": {
+          "text": "string",
+          "citation": {
+            "sourceIds": ["source-id"]
+          }
+        }
+      }
+    ]
+  },
   "targets": [
     {
       "ensemblId": "string",
@@ -218,6 +268,18 @@ Strict output requirements:
 - Use exactly one sentence for the headline, with no more than 28 words.
 - Return exactly two overallSummary claims.
 - Each overallSummary claim must contain no more than 40 words.
+- recommendation.reasoning must contain 1 to 45 words and explain the basis for the
+  ordering without making uncited target-specific claims.
+- recommendation.shortlist must contain 3 to 5 unique supplied targets.
+- recommendation ranks must be consecutive integers starting at 1, with shortlist
+  entries ordered by rank.
+- Each recommendation rationale must contain 8 to 45 words and cite only sources
+  supplied for that shortlisted target. It must weigh evidence and competition rather
+  than merely repeat the association score.
+- Each recommendation caveat must contain 8 to 35 words and cite only sources
+  supplied for that shortlisted target.
+- Preserve each shortlisted target's ensemblId and symbol exactly.
+- Do not rank targets by simply re-sorting associationScore.
 - Each literatureAngle must contain no more than 45 words.
 - Each competitiveLandscapeSummary must contain no more than 40 words.
 - Return exactly one caseFor claim for each target.
@@ -771,6 +833,250 @@ function validateConfidence(
   return value;
 }
 
+function validateRecommendationReasoning(
+  value: unknown,
+  path: string,
+  errors: string[],
+): string | null {
+  if (
+    typeof value !== "string" ||
+    value.trim().length === 0
+  ) {
+    errors.push(
+      `${path} must be a non-empty string.`,
+    );
+    return null;
+  }
+
+  const wordCount = countWords(value);
+
+  if (
+    wordCount >
+    RECOMMENDATION_REASONING_MAX_WORDS
+  ) {
+    errors.push(
+      `${path} contains ${wordCount} words; maximum is ${RECOMMENDATION_REASONING_MAX_WORDS}.`,
+    );
+  }
+
+  return value.trim();
+}
+
+function validateRecommendationItem(
+  value: unknown,
+  index: number,
+  evidenceBundle: EvidenceBundle,
+  seenTargetIds: Set<string>,
+  errors: string[],
+): SynthesisRecommendationItem | null {
+  const path = `recommendation.shortlist[${index}]`;
+
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object.`);
+    return null;
+  }
+
+  const rank = value.rank;
+  const ensemblId = value.ensemblId;
+  const symbol = value.symbol;
+
+  if (
+    typeof rank !== "number" ||
+    !Number.isInteger(rank)
+  ) {
+    errors.push(
+      `${path}.rank must be an integer.`,
+    );
+  } else if (rank !== index + 1) {
+    errors.push(
+      `${path}.rank must be ${index + 1}.`,
+    );
+  }
+
+  if (
+    typeof ensemblId !== "string" ||
+    ensemblId.trim().length === 0
+  ) {
+    errors.push(
+      `${path}.ensemblId must be a non-empty string.`,
+    );
+    return null;
+  }
+
+  const expectedTarget =
+    evidenceBundle.targets.find(
+      (target) =>
+        target.ensemblId === ensemblId,
+    );
+
+  if (!expectedTarget) {
+    errors.push(
+      `${path}.ensemblId must identify a supplied target.`,
+    );
+    return null;
+  }
+
+  if (seenTargetIds.has(ensemblId)) {
+    errors.push(
+      `${path}.ensemblId duplicates a target already in the shortlist.`,
+    );
+  } else {
+    seenTargetIds.add(ensemblId);
+  }
+
+  if (symbol !== expectedTarget.symbol) {
+    errors.push(
+      `${path}.symbol must be "${expectedTarget.symbol}".`,
+    );
+  }
+
+  const allowedSourceIds = new Set(
+    expectedTarget.sources.map(
+      (source) => source.id,
+    ),
+  );
+
+  const firstSourceIdOfType = (
+    sourceType: Source["type"],
+  ): string | null =>
+    expectedTarget.sources.find(
+      (source) => source.type === sourceType,
+    )?.id ?? null;
+
+  const openTargetsFallback =
+    firstSourceIdOfType("open_targets");
+  const trialFallback =
+    firstSourceIdOfType("clinical_trial");
+  const literatureFallback =
+    firstSourceIdOfType("literature");
+  const generalFallback =
+    openTargetsFallback ??
+    trialFallback ??
+    literatureFallback ??
+    null;
+
+  const rationale = validateClaim(
+    value.rationale,
+    `${path}.rationale`,
+    allowedSourceIds,
+    RECOMMENDATION_RATIONALE_MAX_WORDS,
+    errors,
+    MIN_SUBSTANTIVE_CLAIM_WORDS,
+    trialFallback ??
+      openTargetsFallback ??
+      generalFallback,
+  );
+
+  const caveat = validateClaim(
+    value.caveat,
+    `${path}.caveat`,
+    allowedSourceIds,
+    RECOMMENDATION_CAVEAT_MAX_WORDS,
+    errors,
+    MIN_SUBSTANTIVE_CLAIM_WORDS,
+    openTargetsFallback ??
+      trialFallback ??
+      generalFallback,
+  );
+
+  if (
+    typeof rank !== "number" ||
+    !Number.isInteger(rank) ||
+    typeof symbol !== "string" ||
+    !rationale ||
+    !caveat
+  ) {
+    return null;
+  }
+
+  return {
+    rank,
+    ensemblId,
+    symbol,
+    rationale,
+    caveat,
+  };
+}
+
+function validateRecommendation(
+  value: unknown,
+  evidenceBundle: EvidenceBundle,
+  errors: string[],
+): SynthesisRecommendation | null {
+  const path = "recommendation";
+
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object.`);
+    return null;
+  }
+
+  const reasoning =
+    validateRecommendationReasoning(
+      value.reasoning,
+      `${path}.reasoning`,
+      errors,
+    );
+
+  const shortlistValue = value.shortlist;
+  const shortlist: SynthesisRecommendationItem[] = [];
+
+  if (!Array.isArray(shortlistValue)) {
+    errors.push(
+      `${path}.shortlist must be an array.`,
+    );
+  } else {
+    if (
+      shortlistValue.length < 3 ||
+      shortlistValue.length > 5
+    ) {
+      errors.push(
+        `${path}.shortlist must contain 3 to 5 items; received ${shortlistValue.length}.`,
+      );
+    }
+
+    if (
+      shortlistValue.length >
+      evidenceBundle.targets.length
+    ) {
+      errors.push(
+        `${path}.shortlist cannot contain more items than the evidence bundle has targets.`,
+      );
+    }
+
+    const seenTargetIds = new Set<string>();
+
+    shortlistValue.forEach(
+      (itemValue, index) => {
+        const item =
+          validateRecommendationItem(
+            itemValue,
+            index,
+            evidenceBundle,
+            seenTargetIds,
+            errors,
+          );
+
+        if (item) {
+          shortlist.push(item);
+        }
+      },
+    );
+  }
+
+  if (
+    !reasoning ||
+    shortlist.length < 3 ||
+    shortlist.length > 5
+  ) {
+    return null;
+  }
+
+  return {
+    reasoning,
+    shortlist,
+  };
+}
+
 function validateTargetDraft(
   value: unknown,
   index: number,
@@ -995,6 +1301,13 @@ export function parseAndValidateSynthesisDraft(
     );
   }
 
+  const recommendation =
+    validateRecommendation(
+      parsed.recommendation,
+      evidenceBundle,
+      errors,
+    );
+
   const targetsValue = parsed.targets;
   const targets: SynthesisTargetDraft[] = [];
 
@@ -1051,7 +1364,17 @@ export function parseAndValidateSynthesisDraft(
     );
   }
 
-  if (errors.length > 0 || !headline) {
+  if (!recommendation) {
+    errors.push(
+      "recommendation could not be validated.",
+    );
+  }
+
+  if (
+    errors.length > 0 ||
+    !headline ||
+    !recommendation
+  ) {
     throw new SynthesisValidationError(
       errors,
     );
@@ -1060,6 +1383,7 @@ export function parseAndValidateSynthesisDraft(
   return {
     headline,
     overallSummary,
+    recommendation,
     targets,
   };
 }
@@ -1229,6 +1553,8 @@ export function buildBriefFromSynthesisDraft(
     overallSummary:
       synthesisDraft.overallSummary,
     headline: synthesisDraft.headline,
+    recommendation:
+      synthesisDraft.recommendation,
     targets,
     sources:
       deduplicateSources(evidenceBundle),
