@@ -20,11 +20,6 @@ import {
   type BriefProgressState,
 } from "@/lib/client/briefProgress";
 import { readBriefStream } from "@/lib/client/readBriefStream";
-import {
-  clearLatestBrief,
-  loadLatestBrief,
-  saveLatestBrief,
-} from "@/lib/client/briefStorage";
 
 interface DiseaseResolution extends DiseaseMatch {
   alternatives: DiseaseMatch[];
@@ -110,8 +105,6 @@ export function SearchAsk() {
   const [selectedDisease, setSelectedDisease] =
     useState<DiseaseMatch | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [briefWasSaved, setBriefWasSaved] =
-    useState(false);
   const [briefProgress, setBriefProgress] =
     useState<BriefProgressState>(
       INITIAL_BRIEF_PROGRESS_STATE,
@@ -131,38 +124,7 @@ export function SearchAsk() {
     interfaceIsBusy || hasCompletedBrief;
 
   useEffect(() => {
-    const restoreTimer = window.setTimeout(() => {
-      const storedSnapshot = loadLatestBrief();
-
-      if (!storedSnapshot) {
-        return;
-      }
-
-      const { brief, disease } = storedSnapshot;
-
-      setDiseaseName(disease.name);
-      setSelectedDisease(disease);
-      setBriefWasSaved(true);
-      setBriefProgress({
-        stage: "complete",
-        disease: {
-          efoId: disease.efoId,
-          name: disease.name,
-        },
-        targetCount: brief.targets.length,
-        completedTargetCount: brief.targets.length,
-        targets: brief.targets.map((target) => ({
-          ensemblId: target.ensemblId,
-          symbol: target.symbol,
-          complete: true,
-        })),
-        brief,
-        error: null,
-      });
-    }, 0);
-
     return () => {
-      window.clearTimeout(restoreTimer);
       briefAbortController.current?.abort();
     };
   }, []);
@@ -174,13 +136,11 @@ export function SearchAsk() {
   }
 
   function handleStartAnotherDisease() {
-    clearLatestBrief();
     resetBriefProgress();
     setDiseaseName("");
     setSelectedDisease(null);
     setResolution(null);
     setError(null);
-    setBriefWasSaved(false);
   }
 
   async function resolveDisease(query: string) {
@@ -255,7 +215,6 @@ export function SearchAsk() {
     briefAbortController.current = controller;
 
     setError(null);
-    setBriefWasSaved(false);
     setBriefProgress(
       createStartingBriefProgressState({
         efoId: disease.efoId,
@@ -284,20 +243,6 @@ export function SearchAsk() {
           event.type === "error"
         ) {
           receivedTerminalEvent = true;
-        }
-
-        if (event.type === "complete") {
-          const saved = saveLatestBrief({
-            disease: {
-              efoId: disease.efoId,
-              name: disease.name,
-              description:
-                disease.description ?? null,
-            },
-            brief: event.brief,
-          });
-
-          setBriefWasSaved(saved);
         }
 
         setBriefProgress((currentProgress) =>
@@ -485,24 +430,15 @@ export function SearchAsk() {
           {briefProgress.stage === "complete" &&
           briefProgress.brief ? (
             <div>
-              <section
-                aria-label="Saved brief controls"
-                className="mb-6 flex flex-col gap-3 rounded-panel border border-hairline bg-surface p-4 shadow-brief sm:flex-row sm:items-center sm:justify-between"
-              >
-                <p className="font-ui text-[13px] leading-[1.5] text-slate">
-                  {briefWasSaved
-                    ? "Saved in this browser for 14 days."
-                    : "This brief could not be saved in this browser."}
-                </p>
-
+              <div className="mb-6 flex justify-end print:hidden">
                 <button
                   type="button"
                   onClick={handleStartAnotherDisease}
-                  className="self-start font-ui text-[13px] font-medium text-accent hover:text-accent-deep sm:self-auto"
+                  className="font-ui text-[13px] font-medium text-accent hover:text-accent-deep"
                 >
                   Start another disease
                 </button>
-              </section>
+              </div>
 
               <BriefDocument
                 brief={briefProgress.brief}
