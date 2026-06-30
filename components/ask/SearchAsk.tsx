@@ -429,136 +429,140 @@ export function SearchAsk() {
             Sources: Open Targets · ClinicalTrials.gov ·
             Europe PMC. Every substantive claim cited.
           </p>
+        </div>
 
-          <div
-            aria-busy={interfaceIsBusy}
-            className="mt-6 min-h-[20rem]"
-          >
-            {briefProgress.stage === "complete" &&
-            briefProgress.brief ? (
-              <div>
-                <div className="mb-6 flex justify-end print:hidden">
-                  <button
-                    type="button"
-                    onClick={handleStartAnotherDisease}
-                    className="font-ui text-[13px] font-medium text-accent hover:text-accent-deep"
-                  >
-                    Start another disease
-                  </button>
-                </div>
-
-                <BriefDocument
-                  brief={briefProgress.brief}
-                />
+        <div
+          aria-busy={interfaceIsBusy}
+          className={`mt-6 min-h-[20rem] ${
+            hasCompletedBrief
+              ? "w-full max-w-[64rem]"
+              : "max-w-[45rem]"
+          }`}
+        >
+          {briefProgress.stage === "complete" &&
+          briefProgress.brief ? (
+            <div>
+              <div className="mb-6 flex justify-end print:hidden">
+                <button
+                  type="button"
+                  onClick={handleStartAnotherDisease}
+                  className="font-ui text-[13px] font-medium text-accent hover:text-accent-deep"
+                >
+                  Start another disease
+                </button>
               </div>
-            ) : briefProgress.stage !== "idle" ? (
-              <div>
-                <WorkingStepper
-                  progress={briefProgress}
-                />
 
-                {briefProgress.stage === "error" &&
-                selectedDisease ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void buildBrief(selectedDisease)
-                    }
-                    className="mt-4 rounded-control bg-accent px-4 py-2.5 font-ui text-[13px] font-medium text-white transition-colors hover:bg-accent-deep"
-                  >
-                    Try again
-                  </button>
-                ) : null}
-              </div>
-            ) : isResolving ? (
-              <section
-                role="status"
-                className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
-              >
-                <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-accent">
-                  Resolving disease
-                </p>
-
-                <p className="mt-3 font-ui text-[14px] leading-[1.55] text-slate">
-                  Checking Open Targets for the intended
-                  disease.
-                </p>
-              </section>
-            ) : error ? (
-              <section
-                role="alert"
-                className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
-              >
-                <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-status-stopped">
-                  Disease not resolved
-                </p>
-
-                <p className="mt-3 font-ui text-[14px] font-medium leading-[1.55] text-status-stopped">
-                  {error}
-                </p>
-              </section>
-            ) : resolution ? (
-              <DisambiguationList
-                matches={diseaseOptions}
-                disabled={false}
-                onSelect={handleDiseaseSelect}
+              <BriefDocument
+                brief={briefProgress.brief}
               />
-            ) : selectedDisease ? (
-              <section
-                aria-labelledby="resolved-disease-heading"
-                className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
-              >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-accent">
-                      Resolved disease
-                    </p>
+            </div>
+          ) : briefProgress.stage !== "idle" ? (
+            <div>
+              <WorkingStepper
+                progress={briefProgress}
+              />
 
-                    <h2
-                      id="resolved-disease-heading"
-                      className="mt-2 font-document text-[22px] font-semibold leading-[1.3] text-ink"
-                    >
-                      {selectedDisease.name}
-                    </h2>
+              {briefProgress.stage === "error" &&
+              selectedDisease ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void buildBrief(selectedDisease)
+                  }
+                  className="mt-4 rounded-control bg-accent px-4 py-2.5 font-ui text-[13px] font-medium text-white transition-colors hover:bg-accent-deep"
+                >
+                  Try again
+                </button>
+              ) : null}
+            </div>
+          ) : isResolving ? (
+            <section
+              role="status"
+              className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
+            >
+              <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-accent">
+                Resolving disease
+              </p>
 
-                    <p className="mt-2 font-data text-[13px] font-medium text-mist">
-                      {selectedDisease.efoId}
-                    </p>
+              <p className="mt-3 font-ui text-[14px] leading-[1.55] text-slate">
+                Checking Open Targets for the intended
+                disease.
+              </p>
+            </section>
+          ) : error ? (
+            <section
+              role="alert"
+              className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
+            >
+              <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-status-stopped">
+                Disease not resolved
+              </p>
 
-                    {selectedDisease.description ? (
-                      <p className="mt-3 max-w-[65ch] font-ui text-[13px] leading-[1.55] text-slate">
-                        {selectedDisease.description}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleChangeDisease}
-                    className="self-start font-ui text-[13px] font-medium text-accent hover:text-accent-deep"
-                  >
-                    Change
-                  </button>
-                </div>
-
-                <div className="mt-4 flex flex-col gap-3 border-t border-hairline pt-4 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="font-ui text-[13px] text-slate">
-                    Ready to assemble the target brief.
+              <p className="mt-3 font-ui text-[14px] font-medium leading-[1.55] text-status-stopped">
+                {error}
+              </p>
+            </section>
+          ) : resolution ? (
+            <DisambiguationList
+              matches={diseaseOptions}
+              disabled={false}
+              onSelect={handleDiseaseSelect}
+            />
+          ) : selectedDisease ? (
+            <section
+              aria-labelledby="resolved-disease-heading"
+              className="min-h-[14rem] rounded-panel border border-hairline bg-surface p-5 shadow-brief"
+            >
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="font-ui text-[12px] font-medium uppercase tracking-[0.1em] text-accent">
+                    Resolved disease
                   </p>
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void buildBrief(selectedDisease)
-                    }
-                    className="self-start rounded-control bg-accent px-4 py-2.5 font-ui text-[13px] font-medium text-white transition-colors hover:bg-accent-deep sm:self-auto"
+                  <h2
+                    id="resolved-disease-heading"
+                    className="mt-2 font-document text-[22px] font-semibold leading-[1.3] text-ink"
                   >
-                    Build brief
-                  </button>
+                    {selectedDisease.name}
+                  </h2>
+
+                  <p className="mt-2 font-data text-[13px] font-medium text-mist">
+                    {selectedDisease.efoId}
+                  </p>
+
+                  {selectedDisease.description ? (
+                    <p className="mt-3 max-w-[65ch] font-ui text-[13px] leading-[1.55] text-slate">
+                      {selectedDisease.description}
+                    </p>
+                  ) : null}
                 </div>
-              </section>
-            ) : null}
-          </div>
+
+                <button
+                  type="button"
+                  onClick={handleChangeDisease}
+                  className="self-start font-ui text-[13px] font-medium text-accent hover:text-accent-deep"
+                >
+                  Change
+                </button>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3 border-t border-hairline pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="font-ui text-[13px] text-slate">
+                  Ready to assemble the target brief.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void buildBrief(selectedDisease)
+                  }
+                  className="self-start rounded-control bg-accent px-4 py-2.5 font-ui text-[13px] font-medium text-white transition-colors hover:bg-accent-deep sm:self-auto"
+                >
+                  Build brief
+                </button>
+              </div>
+            </section>
+          ) : null}
         </div>
       </div>
     </section>

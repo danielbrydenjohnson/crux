@@ -1,6 +1,7 @@
 import { CitationMarker } from "@/components/brief/CitationMarker";
 import { ConfidenceChip } from "@/components/brief/ConfidenceChip";
 import { EvidenceBreakdown } from "@/components/brief/EvidenceBreakdown";
+import { TrialTable } from "@/components/brief/TrialTable";
 import type {
   Claim,
   Source,
@@ -61,8 +62,9 @@ export function TargetSection({
   const sectionId = `target-${target.ensemblId}`;
   const headingId = `${sectionId}-heading`;
   const evidenceHeadingId = `${sectionId}-evidence-heading`;
-  const trialCount =
-    target.competitiveLandscape.trials.length;
+  const trials =
+    target.competitiveLandscape.trials;
+  const trialCount = trials.length;
 
   return (
     <section
@@ -220,6 +222,24 @@ export function TargetSection({
           />
         </aside>
       </div>
+
+      {trialCount > 0 ? (
+        <section
+          aria-labelledby={`${sectionId}-trials-heading`}
+          className="mt-8"
+        >
+          <h3
+            id={`${sectionId}-trials-heading`}
+            className="font-document text-[18px] font-semibold leading-[1.35] text-ink"
+          >
+            Linked trials
+          </h3>
+
+          <div className="mt-4">
+            <TrialTable trials={trials} />
+          </div>
+        </section>
+      ) : null}
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2">
         <section className="print-avoid-break rounded-panel border border-hairline bg-surface p-5">
