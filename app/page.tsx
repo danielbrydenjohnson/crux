@@ -13,19 +13,19 @@ export default function Home() {
           Crux
         </Link>
 
-        <a
-          href="#about"
-          className="font-ui text-[13px] font-medium text-slate transition-colors hover:text-ink"
+        <Link
+          href="/about"
+          className="font-ui text-[13px] font-medium text-slate transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
         >
           About
-        </a>
+        </Link>
       </header>
 
       <main className="mx-auto w-full max-w-[75rem] flex-1 px-5 pb-16 pt-12 sm:px-8 sm:pb-24 sm:pt-20">
         <SearchAsk />
       </main>
 
-      <footer id="about" className="border-t border-hairline">
+      <footer className="border-t border-hairline">
         <div className="mx-auto w-full max-w-[75rem] px-5 py-6 sm:px-8">
           <p className="max-w-[48rem] font-ui text-[12px] leading-[1.5] text-mist">
             Crux assembles public biomedical evidence into one cited target
