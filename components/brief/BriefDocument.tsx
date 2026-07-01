@@ -1,3 +1,4 @@
+import { AdditionalTargetsSection } from "@/components/brief/AdditionalTargetsSection";
 import { BriefHeader } from "@/components/brief/BriefHeader";
 import { BriefSummary } from "@/components/brief/BriefSummary";
 import { ExportBriefButton } from "@/components/brief/ExportBriefButton";
@@ -38,6 +39,15 @@ export function BriefDocument({
             />
           ))}
         </div>
+
+        <AdditionalTargetsSection
+          additionalTargets={brief.additionalTargets}
+          analysedTargetCount={brief.targets.length}
+          totalTargetsAvailable={
+            brief.query.totalTargetsAvailable
+          }
+          efoId={brief.query.efoId}
+        />
 
         <SourceList sources={brief.sources} />
       </article>

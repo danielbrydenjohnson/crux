@@ -1556,6 +1556,8 @@ export function buildBriefFromSynthesisDraft(
     recommendation:
       synthesisDraft.recommendation,
     targets,
+    additionalTargets:
+      evidenceBundle.additionalTargets,
     sources:
       deduplicateSources(evidenceBundle),
     generatedAt: new Date().toISOString(),

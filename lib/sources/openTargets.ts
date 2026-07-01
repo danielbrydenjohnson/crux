@@ -1,5 +1,9 @@
-import { DEFAULT_TARGET_COUNT } from "@/lib/config";
+import {
+  ADDITIONAL_TARGET_COUNT,
+  DEFAULT_TARGET_COUNT,
+} from "@/lib/config";
 import type {
+  AdditionalTarget,
   EvidenceType,
   Source,
   TractabilitySummary,
@@ -197,6 +201,7 @@ export interface AssociatedTargetsResult {
   };
   totalCount: number;
   targets: AssociatedTarget[];
+  additionalTargets: AdditionalTarget[];
 }
 
 export interface TargetDetailResult {
@@ -432,9 +437,21 @@ function parseAssociatedTarget(
   };
 }
 
+function toAdditionalTarget(
+  target: AssociatedTarget,
+): AdditionalTarget {
+  return {
+    ensemblId: target.ensemblId,
+    symbol: target.symbol,
+    associationScore: target.associationScore,
+  };
+}
+
 function readAssociatedTargets(
   payload: unknown,
   requestedEfoId: string,
+  analysedTargetCount: number,
+  additionalTargetCount: number,
 ): AssociatedTargetsResult | null {
   const data = readGraphQlData(payload);
 
@@ -467,9 +484,18 @@ function readAssociatedTargets(
     );
   }
 
-  const targets = associatedTargets.rows
+  const rankedTargets = associatedTargets.rows
     .map((row) => parseAssociatedTarget(row, requestedEfoId))
     .filter((target): target is AssociatedTarget => target !== null);
+
+  const targets = rankedTargets.slice(0, analysedTargetCount);
+
+  const additionalTargets = rankedTargets
+    .slice(
+      analysedTargetCount,
+      analysedTargetCount + additionalTargetCount,
+    )
+    .map(toAdditionalTarget);
 
   return {
     disease: {
@@ -479,8 +505,9 @@ function readAssociatedTargets(
     totalCount:
       typeof associatedTargets.count === "number"
         ? associatedTargets.count
-        : targets.length,
+        : rankedTargets.length,
     targets,
+    additionalTargets,
   };
 }
 
@@ -858,6 +885,7 @@ export async function resolveDisease(
 export async function getAssociatedTargets(
   efoId: string,
   targetCount: number = DEFAULT_TARGET_COUNT,
+  additionalTargetCount: number = ADDITIONAL_TARGET_COUNT,
 ): Promise<AssociatedTargetsResult | null> {
   const trimmedEfoId = efoId.trim();
 
@@ -869,12 +897,26 @@ export async function getAssociatedTargets(
     throw new Error("Target count must be a positive integer.");
   }
 
+  if (
+    !Number.isInteger(additionalTargetCount) ||
+    additionalTargetCount < 0
+  ) {
+    throw new Error(
+      "Additional target count must be a non-negative integer.",
+    );
+  }
+
   const payload = await requestOpenTargets(ASSOCIATED_TARGETS_QUERY, {
     efoId: trimmedEfoId,
-    size: targetCount,
+    size: targetCount + additionalTargetCount,
   });
 
-  return readAssociatedTargets(payload, trimmedEfoId);
+  return readAssociatedTargets(
+    payload,
+    trimmedEfoId,
+    targetCount,
+    additionalTargetCount,
+  );
 }
 
 export async function getTargetDetail(

@@ -444,6 +444,8 @@ export async function assembleEvidenceBundle({
         associatedTargets.totalCount,
     },
     targets,
+    additionalTargets:
+      associatedTargets.additionalTargets,
     assembledAt:
       new Date().toISOString(),
   };

@@ -16,6 +16,12 @@ export interface EvidenceType {
   score: number;
 }
 
+export interface AdditionalTarget {
+  ensemblId: string;
+  symbol: string;
+  associationScore: number;
+}
+
 export interface Trial {
   nctId: string;
   title: string;
@@ -73,6 +79,7 @@ export interface EvidenceBundle {
     totalTargetsAvailable: number;
   };
   targets: TargetEvidence[];
+  additionalTargets: AdditionalTarget[];
   assembledAt: string;
 }
 
@@ -127,6 +134,7 @@ export interface Brief {
   headline: Claim;
   recommendation: Recommendation;
   targets: TargetBrief[];
+  additionalTargets: AdditionalTarget[];
   sources: Source[];
   generatedAt: string;
 }
